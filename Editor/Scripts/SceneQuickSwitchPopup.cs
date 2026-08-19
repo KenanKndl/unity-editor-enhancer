@@ -14,13 +14,8 @@ namespace LenzDev.EditorCustomizer
     /// in the project, with the currently open scene pinned at the top, then favorited scenes,
     /// then the rest - each group separated by a divider.
     ///
-    /// A real EditorWindow shown via ShowAsDropDown, not a PopupWindowContent shown via
-    /// PopupWindow.Show: the lightweight PopupWindow was silently closing itself mid-gesture as
-    /// soon as a press-and-drag started (confirmed by logging every event reaching OnGUI - the
-    /// window had already been destroyed partway through handling a single MouseDrag pass, with
-    /// no exception and no MouseUp ever recorded). ShowAsDropDown still looks and behaves like a
-    /// dropdown (borderless, positioned off an activator rect, closes on losing focus) but is a
-    /// full EditorWindow underneath and doesn't share that fragility.
+    /// Uses ShowAsDropDown (a real EditorWindow), not PopupWindowContent - PopupWindow.Show
+    /// closes itself unexpectedly mid press-and-drag gestures.
     /// </summary>
     internal class SceneQuickSwitchPopup : EditorWindow
     {
@@ -39,9 +34,7 @@ namespace LenzDev.EditorCustomizer
         private const float MaxListHeight = 280f; // cap for [current row + divider + scrollable groups]
         private const float MaxScrollableHeight = MaxListHeight - CurrentRowBlockHeight;
 
-        // Fixed dark palette, deliberately not skin-adaptive: this popup always renders dark
-        // regardless of the Editor's own Light/Dark skin, so it needs its own self-consistent
-        // colors rather than the EditorGUIUtility.isProSkin branches used elsewhere in the package.
+        // Fixed dark palette - this popup always renders dark regardless of the Editor's skin.
         private static readonly Color BackgroundColor = new Color(0.122f, 0.122f, 0.122f, 1f);
         private static readonly Color FieldBackgroundColor = new Color(0.18f, 0.18f, 0.18f, 1f);
         private static readonly Color TextColor = new Color(0.85f, 0.85f, 0.85f, 1f);
@@ -132,9 +125,7 @@ namespace LenzDev.EditorCustomizer
 
             if (_searchTextStyle == null)
             {
-                // Based on label, not textField: labels carry no background/border/focus-state
-                // chrome at all, so the single pill background drawn behind it stays the only
-                // thing visible - no inner box, no blue keyboard-focus tint.
+                // Based on label, not textField - avoids the native field's own background/focus chrome.
                 _searchTextStyle = new GUIStyle(EditorStyles.label)
                 {
                     alignment = TextAnchor.MiddleLeft,
@@ -172,15 +163,11 @@ namespace LenzDev.EditorCustomizer
             GUILayout.EndArea();
         }
 
-        // Rows here are positioned manually (GUI.BeginGroup + a running y cursor) instead of
-        // through EditorGUILayout.BeginScrollView, which was grabbing GUIUtility.hotControl for
-        // itself as soon as the mouse moved while pressed.
+        // Positioned manually (GUI.BeginGroup + a running y cursor), not EditorGUILayout.
+        // BeginScrollView - that grabs GUIUtility.hotControl as soon as the mouse moves while pressed.
         private void DrawScrollableList()
         {
-            // Captured before any row's HandleRowPressAndClick gets a chance to call Event.Use()
-            // on this same MouseDrag event - once used, Event.current.type reads back as Used for
-            // the rest of this pass, which would make HandleGroupDrag's own type check below
-            // silently never see a drag event at all.
+            // Captured before a row's own Event.Use() below marks this pass's event as Used.
             EventType dragEventType = Event.current.type;
 
             List<string> visibleFavorites = _favoritePaths.Where(Matches).ToList();
@@ -290,9 +277,7 @@ namespace LenzDev.EditorCustomizer
         {
             Rect fieldRect = GUILayoutUtility.GetRect(0, SearchFieldHeight, GUILayout.ExpandWidth(true));
 
-            // Flat fill instead of Unity's native textField chrome - this is the ONLY background
-            // drawn for the whole field, the text itself uses a bare label style with no chrome
-            // of its own (see EnsureStyles).
+            // Flat fill instead of Unity's native textField chrome.
             if (Event.current.type == EventType.Repaint)
                 EditorGUI.DrawRect(fieldRect, FieldBackgroundColor);
 
@@ -360,15 +345,8 @@ namespace LenzDev.EditorCustomizer
                 HandleRowPressAndClick(rowRect, starRect, path, isFavoriteGroup);
         }
 
-        // Press-and-hold-drag to reorder (within the same group only) mirrors a normal click:
-        // MouseDown just remembers the press, MouseUp decides whether it was a click (switch
-        // scene) or a drag (already reordered live via HandleGroupDrag). Tracked purely via the
-        // dragged path (like HierarchyPinBarDrawer/ProjectNavigationBarDrawer's chip dragging and
-        // ColorPaletteAssetEditor's swatch dragging) rather than GUIUtility.hotControl - a
-        // GetControlID-based id would have to stay stable across the reorder this same gesture
-        // triggers, since RefreshGroups() (called by HandleGroupDrag mid-drag) changes each row's
-        // draw order and therefore its control id, breaking the hotControl match on the very next
-        // MouseDrag event.
+        // Tracked via the dragged path rather than GUIUtility.hotControl - reordering mid-drag
+        // changes row draw order (and therefore control ids), which would break a hotControl match.
         private void HandleRowPressAndClick(Rect rowRect, Rect starRect, string path, bool isFavoriteGroup)
         {
             Event e = Event.current;
@@ -404,10 +382,7 @@ namespace LenzDev.EditorCustomizer
             }
         }
 
-        // Insertion-based, like Unity's own reorderable lists: which half of the hovered row the
-        // cursor is over decides "before" vs "after" it, and dragging past the last row entirely
-        // drops at the very end of the group - a plain "before this row" target could never reach
-        // the group's actual last slot, since there'd always be one more path left to sit before.
+        // Insertion point follows the cursor's half of the hovered row; past the last row drops at the end.
         private void HandleGroupDrag(Rect groupRect, List<string> groupPaths, bool isFavoriteGroup, EventType dragEventType)
         {
             if (!_isDraggingRow || _draggedPath == null || _draggedIsFavoriteGroup != isFavoriteGroup) return;
@@ -476,8 +451,6 @@ namespace LenzDev.EditorCustomizer
             }
         }
 
-        // Flat fill, no rounding and no gradient - deliberately plainer than the rest of the
-        // package's RoundedTextureProvider-based highlights, to match this popup's minimal look.
         private static void DrawHighlight(Rect rect)
         {
             EditorGUI.DrawRect(rect, HoverColor);

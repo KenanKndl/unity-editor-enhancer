@@ -27,8 +27,7 @@ namespace LenzDev.EditorCustomizer
 
             string path = AssetDatabase.GUIDToAssetPath(guid);
 
-            // Only open the popup for folders (do nothing for files,
-            // leave Unity's default behavior as is)
+            // Folders only - files keep Unity's default behavior.
             if (!AssetDatabase.IsValidFolder(path))
                 return;
 

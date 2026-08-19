@@ -8,11 +8,9 @@ using UnityEngine.SceneManagement;
 namespace LenzDev.EditorCustomizer
 {
     /// <summary>
-    /// Reads which Hierarchy rows are currently expanded, via SceneHierarchy.GetExpandedIDs() -
-    /// a public method declared on an internal class (UnityEditor.SceneHierarchy), so reaching
-    /// it needs reflection, same as ProjectNavigationBarPatch already does for ProjectBrowser.
-    /// Best effort only: if Unity's internals change shape, this just reports "nothing expanded"
-    /// everywhere, which only affects the redrawn foldout arrow's direction, never functionality.
+    /// Reads which Hierarchy rows are currently expanded via reflection into the internal
+    /// UnityEditor.SceneHierarchy class. Best effort: if Unity's internals change shape, this
+    /// just reports "nothing expanded", which only affects the redrawn foldout arrow's direction.
     /// </summary>
     internal static class HierarchyExpandedState
     {
@@ -35,12 +33,9 @@ namespace LenzDev.EditorCustomizer
         }
 
         /// <summary>
-        /// Collapses every root GameObject (and, recursively, all of their descendants) in the
-        /// active scene, across every open Hierarchy window. Uses SceneHierarchy(Window)'s own
-        /// public SetExpandedRecursive(int id, bool expand) - the exact declaring type isn't
-        /// stable across Unity versions, so both plausible owners are tried once and the winner
-        /// is cached. Same best-effort contract as the rest of this class: any failure just
-        /// disables the feature (nothing to collapse), never throws.
+        /// Collapses every root GameObject (and its descendants) in the active scene, across
+        /// every open Hierarchy window. Best effort: any reflection failure just disables the
+        /// feature rather than throwing.
         /// </summary>
         public static void CollapseAll()
         {

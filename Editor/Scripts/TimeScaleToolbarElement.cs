@@ -6,17 +6,8 @@ using UnityEngine;
 namespace LenzDev.EditorCustomizer
 {
     /// <summary>
-    /// Adds a Time.timeScale control to the main Editor toolbar, docked right next to the
-    /// Play/Pause/Step buttons. Uses Unity 6.3's public MainToolbarElement API - unlike the
-    /// Project/Hierarchy bars, the main toolbar has a real supported extension point, so this
-    /// needs no Harmony patching. Only compiled on 6.3+, since the API doesn't exist before that
-    /// even though the package's own minimum supported version is 6000.0.
-    ///
-    /// A MainToolbarDropdown (rather than an inline MainToolbarSlider) is used deliberately: the
-    /// inline slider's only way to add exact numeric entry is UI Toolkit's built-in
-    /// showInputField, which places the number box in an awkward, disconnected spot next to the
-    /// handle - a dropdown that opens a small IMGUI popup gives full control over the layout
-    /// instead, matching the rest of the package's existing dark minimal popups.
+    /// Adds a Time.timeScale control to the main Editor toolbar via Unity 6.3's public
+    /// MainToolbarElement API. Only compiled on 6.3+, since the API doesn't exist before that.
     /// </summary>
     internal static class TimeScaleToolbarElement
     {
@@ -26,20 +17,12 @@ namespace LenzDev.EditorCustomizer
         {
             var content = new MainToolbarContent("⏱",
                 "Time Scale - click to adjust Time.timeScale");
-            // New elements default to hidden until the user opts in via the toolbar's own
-            // customize UI - show it out of the box instead, since that's the whole point of
-            // adding it.
+            // New toolbar elements are hidden by default until the user opts in - shown here instead.
             return new MainToolbarDropdown(content, TimeScalePopup.Show) { displayed = true };
         }
     }
 
-    /// <summary>
-    /// Small dark popup (matches ColorPickerPopup's minimal style) for setting Time.timeScale:
-    /// an EditorGUILayout.Slider (which already renders a label, a drag slider, AND an editable
-    /// number field in one row - no custom numeric-entry widget needed) plus a row of speed
-    /// presets. Reads Time.timeScale fresh every OnGUI call rather than caching it, so it stays
-    /// correct even if something external changes it while the popup happens to be open.
-    /// </summary>
+    /// <summary>Small dark popup (matches ColorPickerPopup) for setting Time.timeScale.</summary>
     internal class TimeScalePopup : PopupWindowContent
     {
         private const float Width = 220f;
@@ -78,9 +61,7 @@ namespace LenzDev.EditorCustomizer
             EditorGUILayout.LabelField("Time Scale", _labelStyle);
             GUILayout.Space(6);
 
-            // Same labelWidth fix as ColorPickerPopup's text-style rows: this popup is narrower
-            // than EditorGUIUtility.labelWidth's host-view-based default, which would otherwise
-            // squeeze the slider's own numeric field down to a couple of characters.
+            // Narrower than EditorGUIUtility.labelWidth's default, which would squeeze the numeric field.
             float prevLabelWidth = EditorGUIUtility.labelWidth;
             EditorGUIUtility.labelWidth = 70f;
             float newValue = EditorGUILayout.Slider("Scale", Time.timeScale, MinScale, MaxScale);

@@ -172,13 +172,7 @@ namespace LenzDev.EditorCustomizer
         private static void DrawHeaderIcon(Rect rect) => DrawActionIconTexture(rect, ref _headerIconTex, "header-icon");
         private static void DrawCollapseIcon(Rect rect) => DrawActionIconTexture(rect, ref _collapseIconTex, "collapse-icon", 90f);
 
-        /// <summary>
-        /// Loads (and caches) a user-supplied icon from Editor/Resources and draws it tinted with
-        /// ActionIconColor, same skin-adaptive tint the buttons used for their hand-drawn
-        /// placeholder icons before these were added. Assumes a white/transparent source image -
-        /// same convention as RoundedTextureProvider's texture - so the tint fully determines the
-        /// visible color rather than just shading an already-colored icon.
-        /// </summary>
+        /// <summary>Loads and caches an icon from Editor/Resources, drawn tinted with ActionIconColor.</summary>
         private static void DrawActionIconTexture(Rect rect, ref Texture2D cache, string resourceName, float rotationDegrees = 0f)
         {
             if (Event.current.type != EventType.Repaint) return;
@@ -251,9 +245,7 @@ namespace LenzDev.EditorCustomizer
                 EditorGUI.DrawRect(chipRect, chipColor);
             }
 
-            // Reflects the object's own icon (including a custom one set via the Alt+Click icon
-            // picker) same as the Hierarchy row itself - only falls back to the generic icon when
-            // unresolved, since there's no live object to read a custom icon off of then.
+            // Falls back to the generic icon only when unresolved.
             Texture icon = resolved
                 ? EditorGUIUtility.ObjectContent(resolvedGo, resolvedGo.GetType()).image
                 : EditorGUIUtility.IconContent("GameObject Icon").image;

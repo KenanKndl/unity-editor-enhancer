@@ -15,10 +15,8 @@ public static class FolderTreeLines
     {
         if (!FolderTreeSettings.ShowLines) return;
 
-        // Only the left-hand folder tree draws hierarchy lines. Grid view rows are taller than
-        // 20px, and their x is just the icon's column position in the grid - not an indent
-        // level - so without this check lines were being drawn on non-first-column grid icons
-        // in the right-hand Assets content pane, which has nothing to do with folder depth.
+        // Only the left-hand folder tree draws hierarchy lines, not the grid view (where rect.x
+        // is a grid column position, not an indent level).
         if (rect.height > 20f) return;
         if (rect.x <= 16f) return;
 

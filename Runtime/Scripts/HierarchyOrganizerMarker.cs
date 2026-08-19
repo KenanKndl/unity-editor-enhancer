@@ -3,11 +3,10 @@ using UnityEngine;
 namespace LenzDev.EditorCustomizer
 {
     /// <summary>
-    /// Invisible data holder marking a GameObject as a Hierarchy-only organizational row (a
-    /// divider or a header), drawn specially by HierarchyColorOverlay. Lives in a
-    /// Runtime-eligible location for the same reason as HierarchyColorMarker: Unity refuses to
-    /// attach a component defined in an "Editor" folder to a GameObject. HierarchyMarkerBuildStripper
-    /// strips every instance from every scene during the build process so nothing actually ships.
+    /// Marks a GameObject as a Hierarchy-only organizational row (a divider or header), drawn
+    /// specially by HierarchyColorOverlay. Must live outside any "Editor" folder - Unity refuses
+    /// to attach an Editor-assembly component to a GameObject. Stripped from every scene at build
+    /// time by HierarchyMarkerBuildStripper.
     /// </summary>
     [DisallowMultipleComponent]
     [AddComponentMenu("")]
