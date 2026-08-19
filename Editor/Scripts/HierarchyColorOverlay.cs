@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Reflection;
 using UnityEditor;
 using UnityEditor.SceneManagement;
@@ -20,19 +19,28 @@ namespace LenzDev.EditorCustomizer
 
         private static readonly Dictionary<int, (bool hasColor, Color color)> _resolvedCache = new();
 
-        // Unity's real default (unselected) row label color, confirmed live via MCP
-        // execute_code against EditorStyles.label.normal.textColor. FolderColorOverlay.
-        // DefaultTextColor (255,255,255 on pro skin) is noticeably brighter than this and was
-        // only ever validated against already-colored rows; once every row started going through
-        // this same draw path (for the active checkbox), plain uncolored objects picked up that
-        // same too-bright white for the first time. EditorStyles.label already tracks the active
-        // skin on its own, so no light/dark ternary is needed here.
         private static Color DefaultRowTextColor => EditorStyles.label.normal.textColor;
 
         private static readonly Color DefaultOrganizerAccent = new Color(0.55f, 0.55f, 0.55f);
 
         private static GUIStyle _labelStyle;
         private static GUIStyle _organizerLabelStyle;
+
+        /// <summary>
+        /// Do not reuse Unity's internal "TV Line" GUIStyle here even though its metrics match -
+        /// it produces a stray background artifact on hover/selected rows. Use a plain
+        /// EditorStyles.label copy with the two corrected fields instead.
+        /// </summary>
+        private static void EnsureLabelStyle()
+        {
+            if (_labelStyle != null) return;
+
+            _labelStyle = new GUIStyle(EditorStyles.label)
+            {
+                padding = new RectOffset(0, 0, 0, 0),
+                alignment = TextAnchor.UpperLeft
+            };
+        }
 
         static HierarchyColorOverlay()
         {
@@ -47,9 +55,6 @@ namespace LenzDev.EditorCustomizer
             GameObject go = EditorUtility.EntityIdToObject(instanceID) as GameObject;
             if (go == null) return;
 
-            // Checked ahead of the normal color path (not as a separately-subscribed overlay):
-            // subscriber call order across static constructors isn't something to rely on, and
-            // an organizer row must never fall through to the normal icon+label DrawRow.
             HierarchyOrganizerMarker organizer = go.GetComponent<HierarchyOrganizerMarker>();
             if (organizer != null)
             {
@@ -57,9 +62,6 @@ namespace LenzDev.EditorCustomizer
                 return;
             }
 
-            // Every row now goes through DrawRow, colored or not: the active checkbox needs
-            // icon+label shifted right on EVERY row, so Unity's own (unshifted) drawing can no
-            // longer be left showing through for uncolored objects like it used to be.
             bool hasColor = TryResolveColor(go, out Color color);
             DrawRow(go, instanceID, selectionRect, hasColor ? color : (Color?)null);
         }
@@ -68,15 +70,9 @@ namespace LenzDev.EditorCustomizer
         private static FieldInfo _hoveredBackgroundColorField;
 
         /// <summary>
-        /// Unity's own row hover background, read via reflection off the exact internal field the
-        /// Hierarchy's GameObject rows use (UnityEditor.GameObjectTreeViewGUI+GameObjectStyles.
-        /// hoveredBackgroundColor - confirmed live via MCP execute_code, not guessed: it's a solid
-        /// opaque color that REPLACES the row background on hover, not a translucent tint drawn
-        /// on top). Our full-row redraw (needed to hide Unity's unshifted icon/label before we
-        /// draw our own checkbox-shifted copies) would otherwise paint over the real hover state
-        /// entirely, so this is read fresh and used as bgColor itself while hovering. Best effort:
-        /// falls back to the plain default background if a future Unity version renames/removes
-        /// the field.
+        /// Reads Unity's native row hover background via reflection, since the full-row redraw
+        /// below would otherwise paint over it. Falls back to the default background color if a
+        /// future Unity version renames or removes the field.
         /// </summary>
         private static Color GetHoverBackgroundColor(Color fallback)
         {
@@ -107,19 +103,8 @@ namespace LenzDev.EditorCustomizer
         }
 
         /// <summary>
-        /// Draws the row's own active/inactive checkbox - the same GameObject.activeSelf toggle
-        /// as the Inspector's top-left checkbox, including the same cascading-to-children
-        /// behavior, since that's simply how Unity's activeInHierarchy already works (no manual
-        /// propagation needed here). Only actually drawn while hovered or selected (hover-reveal,
-        /// same idea as Unity's own hover-only icons) - otherwise nothing is drawn there at all.
-        ///
-        /// Positioned just right of the color band's fixed start (leftMargin), not relative to
-        /// this row's own indent depth - same "ignore depth" idea as the color band itself, so
-        /// checkboxes form one vertical column. Deliberately does NOT influence where the
-        /// foldout/icon/label get drawn - those stay exactly where Unity's own layout puts them
-        /// (rect.x), left untouched on purpose. Any visual overlap between this fixed-position
-        /// checkbox and a shallow row's own foldout/icon is an accepted trade-off of keeping
-        /// everything else pixel-identical to Unity's default.
+        /// Hover-reveal active/inactive checkbox, fixed to the panel's left margin rather than the
+        /// row's indent depth so checkboxes form a single vertical column.
         /// </summary>
         private static void DrawActiveCheckbox(GameObject go, Rect rect, bool visible)
         {
@@ -144,13 +129,8 @@ namespace LenzDev.EditorCustomizer
         private static MethodInfo _drawVisibilityIconMethod;
 
         /// <summary>
-        /// Restores Unity's own native scene-visibility ("eye") icon, invoked directly via
-        /// reflection (UnityEditor.SceneVisibilityHierarchyGUI.DrawGameObjectItemVisibility) so
-        /// its look, hidden-state persistence, and click-to-toggle behavior are exactly Unity's
-        /// own - not reimplemented. Our full-row background redraw (needed for the checkbox)
-        /// paints over Unity's own copy before we get a chance to see it, same underlying reason
-        /// GetHoverBackgroundColor exists. Placed left of the foldout arrow's own 14px slot, at a
-        /// position fixed to the row's margin rather than its indent depth.
+        /// Restores Unity's native scene-visibility icon via reflection, since the full-row redraw
+        /// below would otherwise paint over it.
         /// </summary>
         private static void DrawSceneVisibilityIcon(GameObject go, Rect rect, bool isItemHovered)
         {
@@ -187,25 +167,13 @@ namespace LenzDev.EditorCustomizer
         private static void DrawOrganizerRow(GameObject go, int instanceID, Rect rect, HierarchyOrganizerMarker organizer)
         {
             HierarchyOrganizerMarker.OrganizerKind kind = organizer.kind;
-            bool isSelected = Selection.entityIds.Contains(instanceID);
+            bool isSelected = SelectionCache.IsObjectSelected(instanceID);
 
-            // Same edge-to-edge full-bleed rect as DrawRow, so a divider/header spans the whole
-            // window width regardless of its indent depth.
-            float leftEdge = Mathf.Min(HierarchySettings.PanelLeftInset, rect.x);
-            float rightEdge = Mathf.Max(rect.xMax, EditorGUIUtility.currentViewWidth);
-            Rect fullRect = new Rect(leftEdge, rect.y, rightEdge - leftEdge, rect.height);
-            bool isHovering = fullRect.Contains(Event.current.mousePosition);
-
-            Color bgColor = isSelected
-                ? FolderColorOverlay.DefaultEditorSelectedColorMainList
-                : (isHovering
-                    ? GetHoverBackgroundColor(FolderColorOverlay.DefaultEditorColorMainList)
-                    : FolderColorOverlay.DefaultEditorColorMainList);
+            Rect fullRect = GetFullRowRect(rect, out bool isHovering);
+            Color bgColor = ResolveRowBackground(isSelected, isHovering);
 
             EditorGUI.DrawRect(fullRect, bgColor);
 
-            // Reuses the existing Alt+click color picker / HierarchyColorMarker pipeline for the
-            // accent color, rather than introducing a second per-object color field.
             if (!HierarchyMetaData.TryGetColor(go, out Color accent))
                 accent = DefaultOrganizerAccent;
 
@@ -225,8 +193,6 @@ namespace LenzDev.EditorCustomizer
                         alignment = TextAnchor.MiddleCenter
                     };
                 }
-                // Every style property is re-applied every draw (not just on first creation),
-                // since they differ per-header rather than being a single shared constant.
                 _organizerLabelStyle.fontStyle = organizer.textStyle;
                 _organizerLabelStyle.fontSize = organizer.fontSize;
                 _organizerLabelStyle.alignment = organizer.textAlign switch
@@ -239,11 +205,7 @@ namespace LenzDev.EditorCustomizer
                     ? organizer.textColor
                     : (isSelected ? Color.white : DefaultRowTextColor);
 
-                // Small inset so left/right-aligned text doesn't touch the row's edge.
                 Rect textRect = new Rect(fullRect.x + 8f, fullRect.y, fullRect.width - 16f, fullRect.height);
-
-                // The GameObject's own name IS the header text - renaming it (F2, same as any
-                // GameObject) is the only editing UI a header needs.
                 EditorGUI.LabelField(textRect, go.name, _organizerLabelStyle);
             }
             else
@@ -262,8 +224,6 @@ namespace LenzDev.EditorCustomizer
                     EditorGUI.DrawRect(lineRect, accent);
                 }
 
-                // No text to reposition for a divider, but the icon/checkbox still need drawing -
-                // they float on top of the line/band, same as they float on top of a colored row.
                 DrawSceneVisibilityIcon(go, rect, isHovering);
                 DrawActiveCheckbox(go, rect, isSelected || isHovering);
             }
@@ -274,6 +234,24 @@ namespace LenzDev.EditorCustomizer
                 Rect foldoutRect = new Rect(rect.x - 14f, rect.y, 14f, rect.height);
                 EditorStyles.foldout.Draw(foldoutRect, false, false, isExpanded, false);
             }
+        }
+
+        private static Rect GetFullRowRect(Rect rect, out bool isHovering)
+        {
+            float leftEdge = Mathf.Min(HierarchySettings.PanelLeftInset, rect.x);
+            float rightEdge = Mathf.Max(rect.xMax, EditorGUIUtility.currentViewWidth);
+            Rect fullRect = new Rect(leftEdge, rect.y, rightEdge - leftEdge, rect.height);
+            isHovering = fullRect.Contains(Event.current.mousePosition);
+            return fullRect;
+        }
+
+        private static Color ResolveRowBackground(bool isSelected, bool isHovering)
+        {
+            return isSelected
+                ? FolderColorOverlay.DefaultEditorSelectedColorMainList
+                : (isHovering
+                    ? GetHoverBackgroundColor(FolderColorOverlay.DefaultEditorColorMainList)
+                    : FolderColorOverlay.DefaultEditorColorMainList);
         }
 
         private static bool TryResolveColor(GameObject go, out Color color)
@@ -308,69 +286,54 @@ namespace LenzDev.EditorCustomizer
 
         private static void DrawRow(GameObject go, int instanceID, Rect rect, Color? tintColor)
         {
-            bool isSelected = Selection.entityIds.Contains(instanceID);
+            bool isSelected = SelectionCache.IsObjectSelected(instanceID);
+            Rect fullRect = GetFullRowRect(rect, out bool isHovering);
 
-            // Cover the row edge-to-edge (the raw rect stops short on both sides: Unity reserves
-            // a strip on the left for the indent/foldout gutter and on the right for hover-only
-            // icons), so the color reads as one unified band instead of an inset pill - same
-            // reach for every row regardless of depth or whether it has children, so a colored
-            // parent's band lines up exactly with its colored children's.
-            float leftEdge = Mathf.Min(HierarchySettings.PanelLeftInset, rect.x);
-            float rightEdge = Mathf.Max(rect.xMax, EditorGUIUtility.currentViewWidth);
-            Rect fullRect = new Rect(leftEdge, rect.y, rightEdge - leftEdge, rect.height);
-            bool isHovering = fullRect.Contains(Event.current.mousePosition);
+            // A plain row (uncolored, unselected, unhovered) needs no redraw - Unity's own
+            // background/icon/label are already correct.
+            bool needsFullRedraw = tintColor.HasValue || isSelected || isHovering;
 
-            Color bgColor = isSelected
-                ? FolderColorOverlay.DefaultEditorSelectedColorMainList
-                : (isHovering
-                    ? GetHoverBackgroundColor(FolderColorOverlay.DefaultEditorColorMainList)
-                    : FolderColorOverlay.DefaultEditorColorMainList);
-
-            EditorGUI.DrawRect(fullRect, bgColor);
-
-            if (tintColor.HasValue)
+            if (needsFullRedraw)
             {
-                CachedTextureData tex = GradientTextureCache.GetOrCreate(tintColor.Value, FolderColorOverlay.DefaultEditorColorNoAlphaMainList);
-                if (tex.ForwardTexture != null)
-                    GUI.DrawTexture(fullRect, tex.ForwardTexture);
+                Color bgColor = ResolveRowBackground(isSelected, isHovering);
+                EditorGUI.DrawRect(fullRect, bgColor);
+
+                if (tintColor.HasValue)
+                {
+                    CachedTextureData tex = GradientTextureCache.GetOrCreate(tintColor.Value, FolderColorOverlay.DefaultEditorColorNoAlphaMainList);
+                    if (tex.ForwardTexture != null)
+                        GUI.DrawTexture(fullRect, tex.ForwardTexture);
+                }
+
+                bool isActive = go.activeInHierarchy;
+
+                Texture icon = EditorGUIUtility.ObjectContent(go, go.GetType()).image;
+                float iconX = rect.x;
+                float labelX = iconX + 16f + 2f;
+
+                if (icon != null)
+                {
+                    var prevColor = GUI.color;
+                    GUI.color = isActive ? Color.white : new Color(1f, 1f, 1f, 0.5f);
+                    GUI.DrawTexture(new Rect(iconX, rect.y, 16f, 16f), icon);
+                    GUI.color = prevColor;
+                }
+
+                EnsureLabelStyle();
+
+                Color textColor = isSelected ? Color.white : DefaultRowTextColor;
+                if (!isActive) textColor.a = 0.6f;
+                _labelStyle.normal.textColor = textColor;
+
+                // Use rect.xMax, not rect.width - GUI.Label silently draws nothing for a
+                // negative-width rect, which rect.width alone can go to before the panel is
+                // actually too narrow to show anything.
+                float labelWidth = Mathf.Max(0f, rect.xMax - labelX);
+                GUI.Label(new Rect(labelX, rect.y, labelWidth, rect.height), go.name, _labelStyle);
             }
 
             DrawSceneVisibilityIcon(go, rect, isHovering);
             DrawActiveCheckbox(go, rect, isSelected || isHovering);
-
-            bool isActive = go.activeInHierarchy;
-
-            Texture icon = EditorGUIUtility.ObjectContent(go, go.GetType()).image;
-            float iconX = rect.x;
-            float labelX = iconX + 16f + 2f;
-
-            if (icon != null)
-            {
-                var prevColor = GUI.color;
-                GUI.color = isActive ? Color.white : new Color(1f, 1f, 1f, 0.5f);
-                GUI.DrawTexture(new Rect(iconX, rect.y, 16f, 16f), icon);
-                GUI.color = prevColor;
-            }
-
-            if (_labelStyle == null)
-            {
-                _labelStyle = new GUIStyle(EditorStyles.label)
-                {
-                    padding = new RectOffset(2, 0, 0, 0)
-                };
-            }
-
-            Color textColor = isSelected ? Color.white : DefaultRowTextColor;
-            if (!isActive) textColor.a = 0.6f;
-            _labelStyle.normal.textColor = textColor;
-
-            // rect.xMax, not rect.width: rect.width is the row's own span, not the distance from
-            // labelX (an absolute coordinate) to the row's right edge. Using rect.width here goes
-            // negative as soon as the panel narrows past labelX, well before it's actually too
-            // narrow to show anything - LabelField silently draws nothing for a negative-width
-            // rect, leaving the opaque background looking like it swallowed the text.
-            float labelWidth = Mathf.Max(0f, rect.xMax - labelX);
-            EditorGUI.LabelField(new Rect(labelX, rect.y, labelWidth, rect.height), go.name, _labelStyle);
 
             if (go.transform.childCount > 0 && Event.current.type == EventType.Repaint)
             {
