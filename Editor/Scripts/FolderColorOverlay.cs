@@ -35,8 +35,6 @@ namespace LenzDev.EditorCustomizer
         {
             _explicitCache.Clear();
             _inheritedColorCache.Clear();
-            _paletteLookupDone = false;
-            _cachedPalette = null;
         }
         
         private static readonly string FolderIconBaseName = "FolderIconBase";
@@ -49,10 +47,6 @@ namespace LenzDev.EditorCustomizer
         public static Color DefaultEditorSelectedColorGridView => EditorGUIUtility.isProSkin ? new Color32(45, 93, 135, 255) : new Color32(58, 114, 176, 255);
         public static Color DefaultTextColor => EditorGUIUtility.isProSkin ? new Color32(255, 255, 255, 255) : new Color32(34, 34, 34, 255);
 
-        // Unity's real default (unselected) row label color, same fix already applied in
-        // HierarchyColorOverlay - DefaultTextColor above is noticeably brighter than a native,
-        // uncolored row's text and was only ever validated against already-colored rows.
-        // EditorStyles.label already tracks the active skin on its own, so no ternary is needed.
         private static Color DefaultRowTextColor => EditorStyles.label.normal.textColor;
 
         static FolderColorOverlay()
@@ -93,7 +87,7 @@ namespace LenzDev.EditorCustomizer
 
         private static void DrawListView(string path, string guid, Rect rect, Color color, bool isTreeView)
         {
-            bool isSelected = Selection.assetGUIDs.Contains(guid);
+            bool isSelected = SelectionCache.IsAssetSelected(guid);
             Color bgColor = isSelected ? DefaultEditorSelectedColorMainList : DefaultEditorColorMainList;
             
             EditorGUI.DrawRect(new Rect(rect.x, rect.y, rect.width, rect.height), bgColor);
@@ -112,7 +106,7 @@ namespace LenzDev.EditorCustomizer
 
             if (isTreeView)
             {
-                bool hasSubFolders = AssetDatabase.GetSubFolders(path).Any();
+                bool hasSubFolders = AssetDatabase.GetSubFolders(path).Length > 0;
                 if (hasSubFolders && Event.current.type == EventType.Repaint)
                 {
                     bool isExpanded = IsFolderExpanded(guid, path);
@@ -123,13 +117,9 @@ namespace LenzDev.EditorCustomizer
 
             bool isEmpty = IsFolderEmptyCached(path);
 
-            // AssetDatabase.GetCachedIcon always returns the generic (non-empty) folder icon for
-            // a folder - the empty/full distinction is something the native Project Browser
-            // decides at paint time, never baked into the asset's own cached icon. Treating that
-            // generic icon as "nothing to preserve" lets an empty folder pick up the native empty
-            // icon below instead. This intentionally stays on Unity's own built-in icons rather
-            // than the package's Resources textures (used by DrawGridView) - those are sized for
-            // tinted grid icons and look oversized when drawn at the list view's fixed 16px size.
+            // AssetDatabase.GetCachedIcon always returns the generic (non-empty) folder icon, so
+            // that generic icon is treated as "nothing to preserve" and swapped for the correct
+            // empty/full built-in icon below.
             Texture iconTex = AssetDatabase.GetCachedIcon(path);
             Texture2D assetIcon = iconTex as Texture2D;
             if (assetIcon == null || assetIcon == EditorGUIUtility.FindTexture("Folder Icon"))
@@ -158,25 +148,19 @@ namespace LenzDev.EditorCustomizer
                 };
                 _folderLabelDefaultFontSize = _folderLabelStyle.fontSize;
             }
-            // Explicit-only text style, no inheritance: read the cache entry populated for this
-            // exact path by TryGetResolvedFolderData above, never a parent's. Reset every field
-            // on every row rather than only when customized - _folderLabelStyle is a single cached
-            // GUIStyle reused across all rows, so a previous row's custom style would otherwise
-            // leak onto the next undecorated folder drawn after it.
+            // Every field is reset on every row - _folderLabelStyle is a single cached GUIStyle
+            // reused across all rows, so a previous row's custom style would otherwise leak onto
+            // the next undecorated folder.
             _explicitCache.TryGetValue(path, out var textStyleData);
             _folderLabelStyle.normal.textColor = textStyleData.hasTextColor ? textStyleData.textColor : DefaultRowTextColor;
             _folderLabelStyle.fontStyle = textStyleData.textStyle;
-            // 0 is the "not customized" storage sentinel, but a GUIStyle's own fontSize=0 means
-            // "use the font asset's native point size" - not "keep whatever this style already
-            // had" - which is larger than EditorStyles.label's actual default. Fall back to the
-            // size captured at construction instead of writing the raw sentinel through.
+            // fontSize's "not customized" sentinel is 0, but GUIStyle itself treats fontSize=0 as
+            // "use the font asset's native size", not "unset" - fall back explicitly instead.
             _folderLabelStyle.fontSize = textStyleData.fontSize > 0 ? textStyleData.fontSize : _folderLabelDefaultFontSize;
 
-            // rect.xMax, not rect.width: rect.width is the row's own span, not the distance from
-            // labelX (an absolute coordinate) to the row's right edge. Using rect.width here goes
-            // negative as soon as the panel narrows past labelX, well before it's actually too
-            // narrow to show anything - LabelField silently draws nothing for a negative-width
-            // rect, leaving the opaque background looking like it swallowed the text.
+            // Use rect.xMax, not rect.width - LabelField silently draws nothing for a
+            // negative-width rect, which rect.width alone can go to before the panel is actually
+            // too narrow to show anything.
             float labelWidth = Mathf.Max(0f, rect.xMax - labelX);
             EditorGUI.LabelField(new Rect(labelX, rect.y, labelWidth, rect.height), folderName, _folderLabelStyle);
         }
@@ -254,19 +238,7 @@ namespace LenzDev.EditorCustomizer
             }
         }
 
-        private static ColorPaletteAsset _cachedPalette;
-        private static bool _paletteLookupDone;
-
-        private static ColorPaletteAsset FindPalette()
-        {
-            if (_paletteLookupDone && _cachedPalette != null) return _cachedPalette;
-
-            string[] guids = AssetDatabase.FindAssets("t:ColorPaletteAsset");
-            _paletteLookupDone = true;
-            if (guids.Length == 0) return _cachedPalette = null;
-            string path = AssetDatabase.GUIDToAssetPath(guids[0]);
-            return _cachedPalette = AssetDatabase.LoadAssetAtPath<ColorPaletteAsset>(path);
-        }
+        private static ColorPaletteAsset FindPalette() => ColorPaletteSettings.Active;
 
         private static void EnsureStatsFresh()
         {
@@ -282,7 +254,7 @@ namespace LenzDev.EditorCustomizer
 
             if (!_emptyFolderCache.TryGetValue(path, out bool isEmpty))
             {
-                isEmpty = !AssetDatabase.GetSubFolders(path).Any() &&
+                isEmpty = AssetDatabase.GetSubFolders(path).Length == 0 &&
                           !AssetDatabase.FindAssets(string.Empty, new[] { path }).Any(g => AssetDatabase.GUIDToAssetPath(g) != path);
                 _emptyFolderCache[path] = isEmpty;
             }
@@ -343,18 +315,10 @@ namespace LenzDev.EditorCustomizer
             return $"{bytes} B";
         }
 
-        // Unity's own grid icon rect isn't a simple fraction of the cell - it reserves a fixed
-        // strip at the bottom for the label and insets the icon within what's left, so a
-        // hand-guessed "80% of the smaller cell dimension" heuristic drifts from the native size
-        // and leaves the wrong amount of room above the label. UnityEditor.ObjectListArea's
-        // internal LocalGroup.ActualImageDrawPosition is the exact method Unity itself calls for
-        // this, so reflecting into it gives a pixel-perfect match instead of guessing. Falls back
-        // to the old heuristic if the internal API ever changes shape.
-        //
-        // referenceIcon should be Unity's own native icon (Folder Icon / FolderEmpty Icon), not
-        // the package's custom Resources texture - the native texture's canvas bakes in real
-        // padding around the glyph (Unity reserves visual breathing room in every built-in
-        // icon), which is what this method needs to reproduce the native size/position.
+        // Matches Unity's own grid icon placement via UnityEditor.ObjectListArea's internal
+        // LocalGroup.ActualImageDrawPosition, falling back to a simple heuristic if that internal
+        // API ever changes shape. referenceIcon should be one of Unity's own native icons, not the
+        // package's custom Resources texture.
         private static Rect GetNativeIconRect(Rect cellRect, Texture2D referenceIcon)
         {
             MethodInfo method = GetActualImageDrawPositionMethod();
@@ -373,14 +337,8 @@ namespace LenzDev.EditorCustomizer
             return new Rect(iconX, iconY, iconSize, iconSize);
         }
 
-        // Measured directly off Unity's built-in Folder/FolderEmpty Icon textures (256x256
-        // canvas, glyph bounding box (32,48)-(223,207)): 12.5% empty margin on each side
-        // horizontally, 18.75% vertically. The package's own FolderIconBase/EmptyFolderIconBase
-        // textures are a tight, padding-free crop of that same glyph (made so GUI.color tints
-        // cleanly), so drawing them straight into the native icon's own bounding rect - which
-        // already has that padding baked in - makes the tinted glyph read as noticeably bigger
-        // than an uncolored neighbor. Shrinking the rect by the same fractions before drawing the
-        // custom texture reproduces the native glyph's actual on-screen size.
+        // Matches the empty margin baked into Unity's native Folder/FolderEmpty Icon textures, so
+        // the package's own (padding-free) icon textures render at the same on-screen size.
         private const float CustomIconHorizontalPadding = 0.125f;
         private const float CustomIconVerticalPadding = 0.1875f;
 
@@ -410,16 +368,13 @@ namespace LenzDev.EditorCustomizer
             return _actualImageDrawPositionMethod;
         }
 
-        // Matches "ProjectBrowserGridLabel".fixedHeight (confirmed live via reflection - not
-        // ObjectListArea.kListLineHeight, which is a *list* mode row-height constant that only
-        // coincidentally looks similar and isn't what grid view actually reserves). GUIStyle's
-        // fixedHeight overrides whatever rect height it's given, so drawing the label at any
-        // other height than this leaves it slightly mispositioned within its own rect.
+        // Matches "ProjectBrowserGridLabel".fixedHeight, which overrides whatever rect height
+        // the label is drawn with.
         private const float GridLabelHeight = 14f;
 
         private static void DrawGridView(string path, string guid, Rect rect, Color color)
         {
-            bool isSelected = Selection.assetGUIDs.Contains(guid);
+            bool isSelected = SelectionCache.IsAssetSelected(guid);
 
             Color gridColor = DefaultEditorColorGridView;
             Color bgTextColor = isSelected ? DefaultEditorSelectedColorGridView : DefaultEditorColorGridView;
@@ -435,7 +390,6 @@ namespace LenzDev.EditorCustomizer
             nameWidth = Mathf.Min(nameWidth, rect.width);
             Rect textRect = new Rect(rect.x + (rect.width - nameWidth) / 2f, rect.yMax - GridLabelHeight, nameWidth, GridLabelHeight);
 
-            // Clear the backgrounds
             EditorGUI.DrawRect(rect, gridColor);
             EditorGUI.DrawRect(textRect, bgTextColor);
 
@@ -447,14 +401,9 @@ namespace LenzDev.EditorCustomizer
 
             if (folderIcon != null)
             {
-                // Size/position against the native icon whenever it's available, even when
-                // actually drawing the custom (tintable) texture - see GetNativeIconRect and
-                // InsetForCustomGlyphPadding for why the two textures can't just share a rect.
-                //
-                // The icon only ever gets the cell area ABOVE the reserved label strip, never
-                // the full cell - passing the full rect here made ActualImageDrawPosition center
-                // the icon across the whole cell height, running it down into where the label
-                // strip belongs.
+                // Icon sizing is measured against the native icon even when drawing the custom
+                // texture - see GetNativeIconRect/InsetForCustomGlyphPadding. The icon only gets
+                // the cell area above the reserved label strip, not the full cell.
                 Rect iconAreaRect = new Rect(rect.x, rect.y, rect.width, rect.height - GridLabelHeight);
                 Texture2D sizingReference = nativeIcon != null ? nativeIcon : folderIcon;
                 Rect nativeCanvasRect = GetNativeIconRect(iconAreaRect, sizingReference);
@@ -466,13 +415,8 @@ namespace LenzDev.EditorCustomizer
                 GUI.color = prevColor;
             }
 
-            // originalGridStyle.normal.textColor is the real native grid label color (confirmed
-            // live via reflection: ~0.824 gray, not pure white) - DefaultTextColor is noticeably
-            // brighter and was only ever validated for the list view band, same issue already
-            // fixed there via DefaultRowTextColor.
             Color labelColor = isSelected ? Color.white : originalGridStyle.normal.textColor;
 
-            // Clone the original style and only adjust its color and alignment
             if (_gridLabelStyle == null)
             {
                 _gridLabelStyle = new GUIStyle(originalGridStyle)
@@ -483,10 +427,7 @@ namespace LenzDev.EditorCustomizer
                 _gridLabelDefaultFontSize = _gridLabelStyle.fontSize;
             }
 
-            // Same explicit-only, always-reset text style as DrawListView - a custom text color
-            // wins over both the default and the selected-row white, since the user picked it
-            // deliberately for this folder. Same fontSize-sentinel fallback too: see the comment
-            // in DrawListView for why 0 can't be written straight through.
+            // A custom text color wins over both the default and the selected-row white.
             _explicitCache.TryGetValue(path, out var textStyleData);
             _gridLabelStyle.normal.textColor = textStyleData.hasTextColor ? textStyleData.textColor : labelColor;
             _gridLabelStyle.fontStyle = textStyleData.textStyle;

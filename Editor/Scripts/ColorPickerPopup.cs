@@ -17,9 +17,7 @@ namespace LenzDev.EditorCustomizer
         private const int Columns = 6;
         private const int DefaultFolderFontSize = 12;
 
-        // Fixed dark palette, deliberately not skin-adaptive - matches SceneQuickSwitchPopup so
-        // every popup in the package reads as one consistent, minimal dark UI regardless of the
-        // Editor's own Light/Dark skin.
+        // Fixed dark palette, matches SceneQuickSwitchPopup.
         private static readonly Color BackgroundColor = new Color(0.122f, 0.122f, 0.122f, 1f);
         private static readonly Color DividerColor = new Color(1f, 1f, 1f, 0.12f);
         private static readonly Color HoverHighlightColor = new Color(1f, 1f, 1f, 0.18f);
@@ -29,6 +27,12 @@ namespace LenzDev.EditorCustomizer
         private GUIStyle _boldLabelStyle;
         private GUIStyle _miniBoldLabelStyle;
         private GUIStyle _helpLabelStyle;
+        private GUIStyle _boldButtonStyle;
+        private GUIStyle _italicButtonStyle;
+
+        // Shared across the clear-color/clear-icon/settings glyph swatches, keyed by font size.
+        private GUIStyle _glyphStyle11;
+        private GUIStyle _glyphStyle12;
 
         private GUIStyle BoldLabelStyle()
         {
@@ -51,12 +55,28 @@ namespace LenzDev.EditorCustomizer
             return _helpLabelStyle;
         }
 
-        /// <summary>
-        /// Extra controls shown only when the popup is opened for a Header-kind
-        /// HierarchyOrganizerMarker: font style (a plain toolbar, so it never closes the popup -
-        /// same non-closing behavior as the stats toggle below) plus a second, smaller color
-        /// grid wired to the header's own text color instead of the background/accent color.
-        /// </summary>
+        private GUIStyle BoldButtonStyle()
+        {
+            if (_boldButtonStyle == null)
+                _boldButtonStyle = new GUIStyle(EditorStyles.miniButtonLeft) { fontStyle = FontStyle.Bold };
+            return _boldButtonStyle;
+        }
+
+        private GUIStyle ItalicButtonStyle()
+        {
+            if (_italicButtonStyle == null)
+                _italicButtonStyle = new GUIStyle(EditorStyles.miniButtonRight) { fontStyle = FontStyle.Italic };
+            return _italicButtonStyle;
+        }
+
+        private GUIStyle GlyphStyle(int fontSize)
+        {
+            if (fontSize == 12)
+                return _glyphStyle12 ??= new GUIStyle(EditorStyles.boldLabel) { alignment = TextAnchor.MiddleCenter, fontSize = 12 };
+            return _glyphStyle11 ??= new GUIStyle(EditorStyles.boldLabel) { alignment = TextAnchor.MiddleCenter, fontSize = 11 };
+        }
+
+        /// <summary>Extra controls shown only for a Header-kind HierarchyOrganizerMarker.</summary>
         private class TextStyleOptions
         {
             public System.Func<FontStyle> GetStyle;
@@ -120,11 +140,8 @@ namespace LenzDev.EditorCustomizer
                 SetStyle = style => FolderMetaData.SetFolderTextStyle(targetPath, style),
                 GetFontSize = () =>
                 {
-                    // 0 means "not customized" in storage (FolderColorOverlay leaves the label's
-                    // own GUIStyle.fontSize alone for that case) but the Font Size slider's [8,32]
-                    // range can't display 0 - clamp it there and back, which would silently write
-                    // a "customized" size the moment the popup opens even without user input. Show
-                    // a real in-range default instead so the slider stays a no-op until dragged.
+                    // 0 means "not customized" in storage; show an in-range default for display
+                    // only, so the slider stays a no-op until dragged.
                     FolderMetaData.TryGetFolderData(targetPath, out _, out _, out _, out _, out _, out _, out int size);
                     return size == 0 ? DefaultFolderFontSize : size;
                 },
@@ -192,21 +209,13 @@ namespace LenzDev.EditorCustomizer
                               "Create one first via 'Create > Editor Customizer > Color Palette'.");
         }
 
-        private static ColorPaletteAsset FindPalette()
-        {
-            string[] guids = AssetDatabase.FindAssets("t:ColorPaletteAsset");
-            if (guids.Length == 0)
-                return null;
-
-            string path = AssetDatabase.GUIDToAssetPath(guids[0]);
-            return AssetDatabase.LoadAssetAtPath<ColorPaletteAsset>(path);
-        }
+        private static ColorPaletteAsset FindPalette() => ColorPaletteSettings.Active;
 
         public override Vector2 GetWindowSize()
         {
             bool hasCustom = _palette.customColors.Count > 0;
 
-            // Top group: leading clear + defaults (settings button lives in its own fixed row now)
+            // Top group: leading clear + defaults.
             int defaultSlots = _palette.defaultColors.Count + 1;
             int rowsDefault = Mathf.CeilToInt((float)defaultSlots / Columns);
 
@@ -227,10 +236,7 @@ namespace LenzDev.EditorCustomizer
 
             if (_textStyle != null)
             {
-                // Row height is singleLineHeight (18) plus each EditorGUILayout control style's own
-                // top/bottom margin, which GUILayout adds on top - 20f alone was cutting the grid
-                // below it a few pixels short, so this rounds up generously rather than chasing an
-                // exact IMGUI margin figure.
+                // Approximate row height, accounting for each control's own top/bottom margin.
                 height += DividerSpacing * 2 + 1f;     // divider ahead of the text style section
                 height += 16f + 4f;                    // foldout header row + spacing
 
@@ -258,8 +264,7 @@ namespace LenzDev.EditorCustomizer
                 height += iconGridHeight + 6f;
             }
 
-            // The header extension packs three labeled dropdown/slider rows - the narrow grid-only
-            // width leaves no room for their labels, so give it more breathing room.
+            // Wider minimum - the header extension's labeled rows need more room than the grid alone.
             float minWidth = _textStyle != null ? 210f : 140f;
 
             return new Vector2(Mathf.Max(width, minWidth), Mathf.Max(height, 40f));
@@ -269,7 +274,6 @@ namespace LenzDev.EditorCustomizer
         {
             EditorGUI.DrawRect(rect, BackgroundColor);
 
-            // Inset the content by the padding amount
             GUILayout.BeginArea(new Rect(Padding, Padding, rect.width - Padding * 2, rect.height - Padding * 2));
 
             DrawSettingsButtonRow();
@@ -306,8 +310,8 @@ namespace LenzDev.EditorCustomizer
 
             GUILayout.EndArea();
 
-            // PopupWindowContent only sizes itself from GetWindowSize() once, at open time - the
-            // Text Style foldout can change content height afterward, so keep the window synced.
+            // GetWindowSize() only runs once at open time; resync since the foldout can change
+            // content height afterward.
             if (Event.current.type == EventType.Repaint)
             {
                 Vector2 desired = GetWindowSize();
@@ -319,11 +323,7 @@ namespace LenzDev.EditorCustomizer
             }
         }
 
-        /// <summary>
-        /// Icon override for the GameObject itself (any GameObject, not just Header organizers -
-        /// unlike the text style section). Only ever shown from the GameObject overload of Show;
-        /// folder popups never set _applyIcon, so this section stays hidden for them.
-        /// </summary>
+        /// <summary>Icon override section - shown only when _applyIcon is set (GameObject popups only).</summary>
         private void DrawIconSection()
         {
             GUILayout.Space(DividerSpacing);
@@ -386,14 +386,9 @@ namespace LenzDev.EditorCustomizer
 
             DrawHoverHighlight(rect);
 
-            var xStyle = new GUIStyle(EditorStyles.boldLabel)
-            {
-                alignment = TextAnchor.MiddleCenter,
-                fontSize = 11
-            };
             Color prevContentColor = GUI.contentColor;
             GUI.contentColor = LightTextColor;
-            GUI.Label(rect, "✕", xStyle);
+            GUI.Label(rect, "✕", GlyphStyle(11));
             GUI.contentColor = prevContentColor;
 
             HandleClick(rect, () => _clearIcon?.Invoke());
@@ -405,11 +400,9 @@ namespace LenzDev.EditorCustomizer
             DrawDivider();
             GUILayout.Space(DividerSpacing);
 
-            // Collapsed by default (a fresh popup instance is created every time it's opened, so
-            // this always starts collapsed) - clicking the header toggles it without closing the
-            // popup, same as every other control here.
+            // Clicking the header toggles it without closing the popup.
             Rect headerRect = GUILayoutUtility.GetRect(0, 16f, GUILayout.ExpandWidth(true));
-            string arrow = _textStyleExpanded ? "▾" : "▸"; // ▾ / ▸
+            string arrow = _textStyleExpanded ? "▾" : "▸";
             GUI.Label(headerRect, arrow + " Text Style", MiniBoldLabelStyle());
             if (Event.current.type == EventType.MouseDown && headerRect.Contains(Event.current.mousePosition))
             {
@@ -422,15 +415,10 @@ namespace LenzDev.EditorCustomizer
 
             GUILayout.Space(4);
 
-            // Plain EditorGUILayout controls (self-labeled dropdown/slider), same as the stats
-            // toggle above: none of these close the popup, so style/alignment/size/color can all
-            // be adjusted in one sitting before the popup is dismissed via a color swatch pick.
+            // None of these controls close the popup.
             //
-            // EditorGUIUtility.labelWidth defaults to a fraction of the *host view's* width, not
-            // this popup's - in this narrow popup that leaves almost nothing for the actual
-            // dropdown/slider value, truncating "Bold Italic" down to a couple of letters. Narrow
-            // it just for these rows so the value gets the room it needs without widening the
-            // popup itself.
+            // labelWidth defaults from the host view's width, not this popup's - narrow it here
+            // so values aren't truncated.
             float prevLabelWidth = EditorGUIUtility.labelWidth;
             EditorGUIUtility.labelWidth = 70f;
 
@@ -439,10 +427,8 @@ namespace LenzDev.EditorCustomizer
             FontStyle currentStyle = _textStyle.GetStyle();
             bool isBold = currentStyle == FontStyle.Bold || currentStyle == FontStyle.BoldAndItalic;
             bool isItalic = currentStyle == FontStyle.Italic || currentStyle == FontStyle.BoldAndItalic;
-            var boldButtonStyle = new GUIStyle(EditorStyles.miniButtonLeft) { fontStyle = FontStyle.Bold };
-            var italicButtonStyle = new GUIStyle(EditorStyles.miniButtonRight) { fontStyle = FontStyle.Italic };
-            bool newBold = GUILayout.Toggle(isBold, "B", boldButtonStyle, GUILayout.Width(24f));
-            bool newItalic = GUILayout.Toggle(isItalic, "I", italicButtonStyle, GUILayout.Width(24f));
+            bool newBold = GUILayout.Toggle(isBold, "B", BoldButtonStyle(), GUILayout.Width(24f));
+            bool newItalic = GUILayout.Toggle(isItalic, "I", ItalicButtonStyle(), GUILayout.Width(24f));
             EditorGUILayout.EndHorizontal();
             if (newBold != isBold || newItalic != isItalic)
             {
@@ -470,9 +456,8 @@ namespace LenzDev.EditorCustomizer
             GUILayout.Space(8);
             EditorGUILayout.LabelField("Text Color", MiniBoldLabelStyle());
 
-            // One merged grid (defaults + custom colors, leading clear only - the settings button
-            // is a fixed top-right row now, not repeated per grid) wired to the header's text
-            // color instead of _applyColor/_clearColor.
+            // Merged grid (defaults + custom), wired to the header's text color instead of
+            // _applyColor/_clearColor.
             List<Color> merged = new List<Color>(_palette.defaultColors.Count + _palette.customColors.Count);
             merged.AddRange(_palette.defaultColors);
             merged.AddRange(_palette.customColors);
@@ -555,25 +540,15 @@ namespace LenzDev.EditorCustomizer
 
             DrawHoverHighlight(rect);
 
-            // Cross mark in the middle (no background, icon only)
-            var xStyle = new GUIStyle(EditorStyles.boldLabel)
-            {
-                alignment = TextAnchor.MiddleCenter,
-                fontSize = 11
-            };
             Color prevContentColor = GUI.contentColor;
             GUI.contentColor = LightTextColor;
-            GUI.Label(rect, "✕", xStyle);
+            GUI.Label(rect, "✕", GlyphStyle(11));
             GUI.contentColor = prevContentColor;
 
             HandleClick(rect, () => clearColor?.Invoke());
         }
 
-        /// <summary>
-        /// Reserves a full-width row and draws the settings (gear) button pinned to its right
-        /// edge - a fixed, always-visible top-right position rather than a swatch buried at the
-        /// end of whichever color grid happened to be drawn last, which was easy to miss.
-        /// </summary>
+        /// <summary>Settings (gear) button, pinned to a fixed top-right row.</summary>
         private void DrawSettingsButtonRow()
         {
             Rect rowRect = GUILayoutUtility.GetRect(0, SwatchSize, GUILayout.ExpandWidth(true));
@@ -586,24 +561,15 @@ namespace LenzDev.EditorCustomizer
         {
             DrawHoverHighlight(rect);
 
-            // Gear mark in the middle (no background, icon only)
-            var gearStyle = new GUIStyle(EditorStyles.boldLabel)
-            {
-                alignment = TextAnchor.MiddleCenter,
-                fontSize = 12
-            };
             Color prevContentColor = GUI.contentColor;
             GUI.contentColor = LightTextColor;
-            GUI.Label(rect, "⚙", gearStyle);
+            GUI.Label(rect, "⚙", GlyphStyle(12));
             GUI.contentColor = prevContentColor;
 
             HandleClick(rect, OpenPaletteSettings);
         }
 
-        /// <summary>
-        /// Called when the settings (gear) button is clicked: opens the palette's ScriptableObject
-        /// Inspector in a separate, focused window.
-        /// </summary>
+        /// <summary>Opens the palette's Inspector in a separate window.</summary>
         private void OpenPaletteSettings()
         {
             EditorUtility.OpenPropertyEditor(_palette);
@@ -619,9 +585,7 @@ namespace LenzDev.EditorCustomizer
             if (!rect.Contains(Event.current.mousePosition))
                 return;
 
-            // Draw a subtle highlight around the swatch, in the same rounded shape.
-            // This highlight must be drawn BEFORE the actual content (color/icon) so that the
-            // content on top stays crisp and doesn't look mismatched, like a square frame.
+            // Drawn before the swatch content so the content stays crisp on top.
             Rect expanded = new Rect(rect.x - 2, rect.y - 2, rect.width + 4, rect.height + 4);
 
             Color highlight = HoverHighlightColor;
