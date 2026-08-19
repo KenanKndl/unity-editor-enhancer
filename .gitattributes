@@ -1,0 +1,5 @@
+# This package is distributed as a plain git repo (installed via Package Manager's "Add package
+# from git URL"), which does not smudge Git LFS content. Override the parent repo's LFS tracking
+# so the package's small bundled binaries (icons, Harmony.dll) are stored as regular blobs.
+*.dll !filter !diff !merge !text
+*.png !filter !diff !merge !text
