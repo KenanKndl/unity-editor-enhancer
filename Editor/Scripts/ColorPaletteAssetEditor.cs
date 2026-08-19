@@ -7,70 +7,109 @@ namespace LenzDev.EditorCustomizer
     [CustomEditor(typeof(ColorPaletteAsset))]
     public class ColorPaletteAssetEditor : Editor
     {
-        private const float SwatchSize = 28f;
-        private const float Spacing = 6f;
+        private const float SwatchSize = 30f;
+        private const float Spacing = 8f;
 
-        // Kept short on purpose: the Inspector is most often docked in the narrow default side
-        // panel, and GUILayout.Toolbar clips text rather than shrinking it - longer labels like
-        // "Project Window" or "Hierarchy Window" would render blank there.
+        // Sharp corners everywhere except the round color-swatch preview (RoundedTextureProvider).
+        private const float CardRadius = 0f;
+        private const float TabBarHeight = 28f;
+
+        // Brand color - used sparingly (banner underline and heart icon only).
+        private static readonly Color AccentColor = new Color32(0xFA, 0x00, 0x50, 0xFF);
+
+        // Fixed dark background, matches ColorPickerPopup and SceneQuickSwitchPopup.
+        private static readonly Color CardBackgroundColor = new Color(0.122f, 0.122f, 0.122f, 1f);
+        private static readonly Color CardBorder = new Color(1f, 1f, 1f, 0.08f);
+        private static readonly Color TabTrackFill = new Color(0.122f, 0.122f, 0.122f, 1f);
+        private static readonly Color TabSelectedFill = new Color(1f, 1f, 1f, 0.13f);
+
+        // Explicit text colors for the fixed-dark cards above (not skin-adaptive).
+        private static readonly Color LightTextColor = new Color(0.92f, 0.92f, 0.92f, 1f);
+        private static readonly Color MutedTextColor = new Color(0.92f, 0.92f, 0.92f, 0.75f);
+        private static readonly Color TabUnselectedText = new Color(0.92f, 0.92f, 0.92f, 0.55f);
+
+        // Kept short - GUILayout.Toolbar clips rather than shrinks text in a narrow docked Inspector.
         private static readonly string[] TabNames =
         {
             "Colors", "Icons", "Project", "Hierarchy", "Stats"
         };
 
-        // Static, not per-instance: keeps the selected tab sticky across the Editor instance
-        // recreations Unity does on every selection change, without needing an EditorPrefs key.
+        // Static so the selected tab survives Editor instance recreation on selection change.
         private static int _selectedTab;
 
-        // Read once from the installed package manifest so this label can't drift out of sync
-        // with package.json on future releases the way a hardcoded string would. Resolved lazily
-        // in OnEnable rather than a field initializer - Unity forbids PackageInfo lookups from a
-        // ScriptableObject/Editor type initializer and throws a TypeInitializationException there.
+        // Resolved lazily in OnEnable - PackageInfo lookups throw from a static field initializer.
         private static string _packageVersionLabel;
 
         private static List<Color> _dragList;
         private static int _dragFromIndex = -1;
         private static bool _isDragging;
 
-        // Index into customColors currently being edited in place, or -1 when the color panel
-        // holds an unsaved new color instead (e.g. right after clicking a Default preset).
+        // -1 when the color panel holds an unsaved new color instead of editing an existing entry.
         private static int _editingCustomIndex = -1;
 
+        // Backgrounds/borders are painted separately by EditorGuiKit; these only carry
+        // padding/margin/typography.
         private GUIStyle _sectionStyle;
-        private GUIStyle _titleStyle;
         private GUIStyle _headerStyle;
         private GUIStyle _hexFieldStyle;
         private GUIStyle _bannerStyle;
         private GUIStyle _footerStyle;
-        private GUIStyle _tabStyle;
+        private GUIStyle _tabLabelStyle;
+        private GUIStyle _tabLabelSelectedStyle;
+        private GUIStyle _mainTitleStyle;
+        private GUIStyle _subtitleStyle;
+        private GUIStyle _versionLabelStyle;
+        private GUIStyle _brandLabelStyle;
+        private GUIStyle _fieldLabelStyle;
+        private GUIStyle _noticeStyle;
 
         private void OnEnable()
         {
-            if (_packageVersionLabel != null) return;
+            if (_packageVersionLabel == null)
+            {
+                var info = UnityEditor.PackageManager.PackageInfo.FindForAssembly(typeof(ColorPaletteAssetEditor).Assembly);
+                _packageVersionLabel = info != null ? $"v{info.version} · Project Enhancements" : "Project Enhancements";
+            }
 
-            var info = UnityEditor.PackageManager.PackageInfo.FindForAssembly(typeof(ColorPaletteAssetEditor).Assembly);
-            _packageVersionLabel = info != null ? $"v{info.version} · Project Enhancements" : "Project Enhancements";
+            // Must run on every instance - Editor is recreated per selection change.
+            PackageUpdateChecker.EnsureInstalledVersionLoaded();
+            PackageUpdateChecker.Changed += Repaint;
+        }
+
+        private void OnDisable()
+        {
+            PackageUpdateChecker.Changed -= Repaint;
         }
 
         private void InitStyles()
         {
-            if (_sectionStyle != null && _bannerStyle != null) return;
+            // Every field must be checked - a domain reload can preserve some already-initialized
+            // fields while leaving newly added ones null.
+            if (_sectionStyle != null && _headerStyle != null && _subtitleStyle != null &&
+                _hexFieldStyle != null && _bannerStyle != null && _footerStyle != null &&
+                _tabLabelStyle != null && _tabLabelSelectedStyle != null && _mainTitleStyle != null &&
+                _versionLabelStyle != null && _brandLabelStyle != null && _fieldLabelStyle != null &&
+                _noticeStyle != null)
+                return;
 
-            _sectionStyle = new GUIStyle(EditorStyles.helpBox)
+            _sectionStyle = new GUIStyle
             {
-                padding = new RectOffset(10, 10, 10, 10),
+                padding = new RectOffset(12, 12, 10, 10),
                 margin = new RectOffset(0, 0, 0, 10)
-            };
-
-            _titleStyle = new GUIStyle(EditorStyles.boldLabel)
-            {
-                fontSize = 13,
-                margin = new RectOffset(2, 0, 4, 4)
             };
 
             _headerStyle = new GUIStyle(EditorStyles.boldLabel)
             {
-                margin = new RectOffset(2, 0, 0, 6)
+                fontSize = 12,
+                margin = new RectOffset(0, 0, 0, 2),
+                normal = { textColor = LightTextColor }
+            };
+
+            _subtitleStyle = new GUIStyle(EditorStyles.miniLabel)
+            {
+                wordWrap = true,
+                margin = new RectOffset(0, 0, 2, 6),
+                normal = { textColor = MutedTextColor }
             };
 
             _hexFieldStyle = new GUIStyle(EditorStyles.textField)
@@ -78,28 +117,38 @@ namespace LenzDev.EditorCustomizer
                 alignment = TextAnchor.MiddleLeft
             };
 
-            _bannerStyle = new GUIStyle(EditorStyles.helpBox)
+            _bannerStyle = new GUIStyle
             {
-                padding = new RectOffset(12, 12, 10, 10),
+                padding = new RectOffset(14, 14, 12, 12),
                 margin = new RectOffset(0, 0, 0, 12)
             };
 
             _footerStyle = new GUIStyle(EditorStyles.centeredGreyMiniLabel)
             {
                 alignment = TextAnchor.MiddleCenter,
-                margin = new RectOffset(0, 0, 8, 4)
+                margin = new RectOffset(0, 0, 8, 4),
+                normal = { textColor = MutedTextColor }
             };
 
-            // Wrapping instead of clipping: even with the shortened labels above, the narrow
-            // default Inspector panel can still pinch a tab below its label's single-line width.
-            _tabStyle = new GUIStyle(EditorStyles.toolbarButton)
+            _tabLabelStyle = new GUIStyle(EditorStyles.miniBoldLabel)
             {
-                wordWrap = true,
-                fontSize = 10
+                alignment = TextAnchor.MiddleCenter,
+                fontSize = 11
             };
+            _tabLabelSelectedStyle = new GUIStyle(_tabLabelStyle);
+
+            _mainTitleStyle = new GUIStyle(EditorStyles.boldLabel)
+            {
+                fontSize = 14,
+                normal = { textColor = LightTextColor }
+            };
+
+            _versionLabelStyle = new GUIStyle(EditorStyles.miniLabel) { normal = { textColor = MutedTextColor } };
+            _brandLabelStyle = new GUIStyle(EditorStyles.miniBoldLabel) { normal = { textColor = LightTextColor } };
+            _fieldLabelStyle = new GUIStyle(EditorStyles.label) { normal = { textColor = LightTextColor } };
+            _noticeStyle = new GUIStyle(EditorStyles.label) { wordWrap = true, normal = { textColor = LightTextColor } };
         }
 
-        private static readonly Color HeartColor = new Color32(0xFA, 0x00, 0x50, 0xFF);
         private static Texture2D _heartIconTex;
 
         private static void DrawHeartIcon()
@@ -107,37 +156,37 @@ namespace LenzDev.EditorCustomizer
             if (_heartIconTex == null)
                 _heartIconTex = Resources.Load<Texture2D>("heart-filled");
 
-            // Reserve the same row height the adjacent "LenzDev" label uses (not just the icon's
-            // own 12px), then center the icon within it - otherwise a shorter fixed-size rect
-            // sits top-aligned against a taller label and reads as sitting above the text.
             const float iconSize = 12f;
             float rowHeight = EditorStyles.miniBoldLabel.CalcHeight(GUIContent.none, 100f);
             Rect reserved = GUILayoutUtility.GetRect(iconSize, rowHeight, GUILayout.Width(iconSize), GUILayout.Height(rowHeight));
             if (_heartIconTex == null) return;
 
-            Rect iconRect = new Rect(reserved.x, reserved.y + (reserved.height - iconSize) / 2f, iconSize, iconSize);
+            // Nudged down slightly to align with the adjacent label's glyph baseline.
+            Rect iconRect = new Rect(reserved.x, reserved.y + (reserved.height - iconSize) / 2f + 2f, iconSize, iconSize);
 
             var prevColor = GUI.color;
-            GUI.color = HeartColor;
+            GUI.color = AccentColor;
             GUI.DrawTexture(iconRect, _heartIconTex, ScaleMode.ScaleToFit);
             GUI.color = prevColor;
         }
 
-        private static void DrawSeparator()
+        private static void DrawSeparator(Color color)
         {
             Rect r = EditorGUILayout.GetControlRect(false, 1);
-            EditorGUI.DrawRect(r, EditorGUIUtility.isProSkin
-                ? new Color(1f, 1f, 1f, 0.1f)
-                : new Color(0f, 0f, 0f, 0.15f));
+            if (Event.current.type == EventType.Repaint)
+                EditorGUI.DrawRect(r, color);
         }
+
+        private static Color NeutralSeparatorColor => EditorGUIUtility.isProSkin
+            ? new Color(1f, 1f, 1f, 0.1f)
+            : new Color(0f, 0f, 0f, 0.15f);
 
         public override void OnInspectorGUI()
         {
             var palette = (ColorPaletteAsset)target;
             InitStyles();
 
-            // Only relevant to the Colors tab - gated so Delete doesn't accidentally fire while
-            // browsing another tab (e.g. deleting text mid-edit in a field elsewhere).
+            // Only relevant to the Colors tab - avoids stealing Delete from another tab's field.
             if (_selectedTab == 0 && Event.current.type == EventType.KeyDown && Event.current.keyCode == KeyCode.Delete)
             {
                 if (_editingCustomIndex >= 0 && _editingCustomIndex < palette.customColors.Count)
@@ -149,30 +198,34 @@ namespace LenzDev.EditorCustomizer
 
             EditorGUILayout.Space(4);
 
-            EditorGUILayout.BeginVertical(_bannerStyle);
+            EditorGuiKit.BeginCard(_bannerStyle, CardBackgroundColor, CardBorder, CardRadius);
 
-            var mainTitleStyle = new GUIStyle(EditorStyles.boldLabel) { fontSize = 14 };
-            EditorGUILayout.LabelField("Unity Folder Customizer", mainTitleStyle);
+            EditorGUILayout.LabelField("Unity Editor Enhancer", _mainTitleStyle);
 
             EditorGUILayout.Space(2);
-            DrawSeparator();
+            DrawSeparator(new Color(AccentColor.r, AccentColor.g, AccentColor.b, 0.45f));
             EditorGUILayout.Space(4);
 
             EditorGUILayout.BeginHorizontal();
-            EditorGUILayout.LabelField(_packageVersionLabel, EditorStyles.miniLabel);
+            EditorGUILayout.LabelField(_packageVersionLabel, _versionLabelStyle);
 
             GUILayout.FlexibleSpace();
 
             DrawHeartIcon();
 
-            EditorGUILayout.LabelField("LenzDev", EditorStyles.miniBoldLabel, GUILayout.Width(50));
+            EditorGUILayout.LabelField("LenzDev", _brandLabelStyle, GUILayout.Width(50));
             EditorGUILayout.EndHorizontal();
+
+            EditorGUILayout.Space(6);
+            DrawUpdateCheckRow();
 
             EditorGUILayout.EndVertical();
 
+            DrawActivePaletteStatus(palette);
+
             EditorGUILayout.Space(2);
-            _selectedTab = GUILayout.Toolbar(_selectedTab, TabNames, _tabStyle, GUILayout.Height(26f));
-            EditorGUILayout.Space(6);
+            DrawTabBar();
+            EditorGUILayout.Space(8);
 
             switch (_selectedTab)
             {
@@ -183,35 +236,163 @@ namespace LenzDev.EditorCustomizer
                 case 4: DrawFolderStatsTab(palette); break;
             }
 
+            EditorGUILayout.Space(4);
+            DrawSeparator(NeutralSeparatorColor);
             EditorGUILayout.LabelField("LenzDev Editor Extensions © 2026", _footerStyle);
             EditorGUILayout.Space(2);
         }
 
+        /// <summary>Update-check status/action row embedded in the banner, visible regardless of the selected tab.</summary>
+        private void DrawUpdateCheckRow()
+        {
+            bool busy = PackageUpdateChecker.IsBusy;
+            bool updateAvailable = PackageUpdateChecker.UpdateAvailable;
+
+            EditorGUILayout.BeginHorizontal();
+
+            using (new EditorGUI.DisabledScope(busy))
+            {
+                if (updateAvailable)
+                {
+                    if (GUILayout.Button($"Update to {PackageUpdateChecker.LatestVersion}", GUILayout.Height(18)))
+                        PackageUpdateChecker.StartUpdate();
+                }
+                else if (GUILayout.Button("Check for Updates", GUILayout.Height(18)))
+                {
+                    PackageUpdateChecker.StartCheck();
+                }
+            }
+
+            GUILayout.FlexibleSpace();
+
+            string statusText;
+            if (busy)
+                statusText = PackageUpdateChecker.IsChecking ? "Checking for updates..." : "Updating...";
+            else if (updateAvailable)
+                statusText = $"v{PackageUpdateChecker.LatestVersion} available";
+            else if (!string.IsNullOrEmpty(PackageUpdateChecker.LatestVersion))
+                statusText = "Up to date";
+            else
+                statusText = string.Empty;
+
+            EditorGUILayout.LabelField(statusText, updateAvailable ? _fieldLabelStyle : _versionLabelStyle);
+
+            EditorGUILayout.EndHorizontal();
+
+            if (!busy && !string.IsNullOrEmpty(PackageUpdateChecker.StatusMessage))
+                EditorGUILayout.LabelField(PackageUpdateChecker.StatusMessage, _subtitleStyle);
+
+            EditorGUILayout.Space(6);
+            DrawBugReportRow();
+        }
+
+        /// <summary>Opens the bug/feedback report window (see BugReportWindow).</summary>
+        private static void DrawBugReportRow()
+        {
+            if (GUILayout.Button("Report a Bug / Send Feedback", GUILayout.Height(20)))
+                BugReportWindow.Open();
+        }
+
+        /// <summary>Custom segmented tab bar - click-driven only, no hover state.</summary>
+        private void DrawTabBar()
+        {
+            Rect barRect = GUILayoutUtility.GetRect(0, TabBarHeight, GUILayout.ExpandWidth(true));
+            EditorGuiKit.DrawRoundedRect(barRect, TabTrackFill, CardRadius);
+
+            _tabLabelStyle.normal.textColor = TabUnselectedText;
+            _tabLabelSelectedStyle.normal.textColor = LightTextColor;
+
+            float tabWidth = barRect.width / TabNames.Length;
+            const float pillInset = 2f;
+
+            for (int i = 0; i < TabNames.Length; i++)
+            {
+                Rect tabRect = new Rect(barRect.x + tabWidth * i, barRect.y, tabWidth, barRect.height);
+                bool selected = _selectedTab == i;
+
+                if (selected)
+                {
+                    Rect highlightRect = new Rect(tabRect.x + pillInset, tabRect.y + pillInset,
+                        tabRect.width - pillInset * 2f, tabRect.height - pillInset * 2f);
+                    EditorGuiKit.DrawRoundedRect(highlightRect, TabSelectedFill, 0f);
+                }
+
+                GUI.Label(tabRect, TabNames[i], selected ? _tabLabelSelectedStyle : _tabLabelStyle);
+
+                if (!selected && Event.current.type == EventType.MouseDown && tabRect.Contains(Event.current.mousePosition))
+                {
+                    _selectedTab = i;
+                    Event.current.Use();
+                }
+            }
+        }
+
+        /// <summary>Shared section header: bold title plus an optional muted subtitle.</summary>
+        private void DrawSectionHeader(string title, string subtitle = null)
+        {
+            Rect headerRect = GUILayoutUtility.GetRect(0, 16f, GUILayout.ExpandWidth(true));
+            GUI.Label(headerRect, title, _headerStyle);
+
+            if (!string.IsNullOrEmpty(subtitle))
+            {
+                GUILayout.Space(-2f);
+                EditorGUILayout.LabelField(subtitle, _subtitleStyle);
+            }
+
+            GUILayout.Space(6f);
+        }
+
+        /// <summary>Shown only when multiple ColorPaletteAssets exist in the project.</summary>
+        private void DrawActivePaletteStatus(ColorPaletteAsset palette)
+        {
+            if (!ColorPaletteSettings.HasAmbiguity)
+                return;
+
+            EditorGuiKit.BeginCard(_sectionStyle, CardBackgroundColor, CardBorder, CardRadius);
+
+            bool isActive = ColorPaletteSettings.IsActive(palette);
+            EditorGUILayout.LabelField(isActive
+                ? "Multiple Color Palette assets exist in this project. This is the active one - " +
+                  "the Project/Hierarchy overlays read from it."
+                : "Multiple Color Palette assets exist in this project, and another one is active. " +
+                  "Overlays won't use this one until you set it active.", _noticeStyle);
+
+            if (!isActive)
+            {
+                EditorGUILayout.Space(6);
+                if (GUILayout.Button("Set as Active Palette", GUILayout.Height(22)))
+                {
+                    ColorPaletteSettings.SetActive(palette);
+                    EditorApplication.RepaintProjectWindow();
+                    EditorApplication.RepaintHierarchyWindow();
+                }
+            }
+
+            EditorGUILayout.EndVertical();
+        }
+
         private void DrawColorsTab(ColorPaletteAsset palette)
         {
-            // The customColors list can shrink from under a stale index (e.g. after an Undo, or
-            // after switching to a different palette asset that has fewer entries).
+            // Guards against a stale index after an Undo or switching to a palette with fewer entries.
             if (_editingCustomIndex >= palette.customColors.Count)
                 _editingCustomIndex = -1;
 
-            EditorGUILayout.BeginVertical(_sectionStyle);
-            EditorGUILayout.LabelField("Default Colors", _headerStyle);
-            EditorGUILayout.LabelField("Fixed presets - click one to start a new custom color from it.", EditorStyles.miniLabel);
-            EditorGUILayout.Space(4);
+            EditorGuiKit.BeginCard(_sectionStyle, CardBackgroundColor, CardBorder, CardRadius);
+            DrawSectionHeader("Default Colors", "Fixed presets - click one to start a new custom color from it.");
             DrawColorGrid(palette.defaultColors, palette, isDefault: true);
             EditorGUILayout.EndVertical();
 
-            EditorGUILayout.BeginVertical(_sectionStyle);
-            EditorGUILayout.LabelField("Custom Colors", _headerStyle);
+            EditorGuiKit.BeginCard(_sectionStyle, CardBackgroundColor, CardBorder, CardRadius);
+            DrawSectionHeader("Custom Colors");
             DrawColorGrid(palette.customColors, palette, isDefault: false);
             if (palette.customColors.Count > 0)
             {
                 EditorGUILayout.Space(4);
-                EditorGUILayout.LabelField("Click to edit in place · Drag to reorder · Right-click to delete", EditorStyles.miniLabel);
+                EditorGUILayout.LabelField("Click to edit in place · Drag to reorder · Right-click to delete", _subtitleStyle);
             }
             EditorGUILayout.EndVertical();
 
-            EditorGUILayout.BeginVertical(_sectionStyle);
+            EditorGuiKit.BeginCard(_sectionStyle, CardBackgroundColor, CardBorder, CardRadius);
             DrawSelectedColorPanel(palette);
             EditorGUILayout.EndVertical();
         }
@@ -227,18 +408,17 @@ namespace LenzDev.EditorCustomizer
 
         private void DrawIconsTab(ColorPaletteAsset palette)
         {
-            EditorGUILayout.BeginVertical(_sectionStyle);
-            EditorGUILayout.LabelField("Your Icon Palette", _headerStyle);
+            EditorGuiKit.BeginCard(_sectionStyle, CardBackgroundColor, CardBorder, CardRadius);
+            DrawSectionHeader("Your Icon Palette");
             DrawIconPaletteGrid(palette);
-            EditorGUILayout.HelpBox(
-                "Click an icon in the categories below to add it here. Alt+Click a GameObject in " +
-                "the Hierarchy to assign one of these icons to it.", MessageType.None);
+            EditorGUILayout.Space(4);
+            EditorGUILayout.LabelField("Alt+Click a GameObject in the Hierarchy to assign one of these icons to it.", _subtitleStyle);
             EditorGUILayout.EndVertical();
 
             foreach (var category in IconCatalog.Categories)
             {
-                EditorGUILayout.BeginVertical(_sectionStyle);
-                EditorGUILayout.LabelField(category.Name, _headerStyle);
+                EditorGuiKit.BeginCard(_sectionStyle, CardBackgroundColor, CardBorder, CardRadius);
+                DrawSectionHeader(category.Name);
                 DrawIconCatalogGrid(category.IconNames, palette);
                 EditorGUILayout.EndVertical();
             }
@@ -246,8 +426,8 @@ namespace LenzDev.EditorCustomizer
 
         private void DrawProjectWindowTab()
         {
-            EditorGUILayout.BeginVertical(_sectionStyle);
-            EditorGUILayout.LabelField("Project Window Preferences", _headerStyle);
+            EditorGuiKit.BeginCard(_sectionStyle, CardBackgroundColor, CardBorder, CardRadius);
+            DrawSectionHeader("Project Window Preferences");
 
             EditorGUI.BeginChangeCheck();
             bool currentShowLines = FolderTreeSettings.ShowLines;
@@ -272,8 +452,8 @@ namespace LenzDev.EditorCustomizer
 
         private void DrawHierarchyWindowTab()
         {
-            EditorGUILayout.BeginVertical(_sectionStyle);
-            EditorGUILayout.LabelField("Hierarchy Window Preferences", _headerStyle);
+            EditorGuiKit.BeginCard(_sectionStyle, CardBackgroundColor, CardBorder, CardRadius);
+            DrawSectionHeader("Hierarchy Window Preferences");
 
             EditorGUI.BeginChangeCheck();
             bool currentSingleRow = HierarchySettings.SingleRowColoring;
@@ -293,7 +473,7 @@ namespace LenzDev.EditorCustomizer
                 HierarchySettings.PanelLeftInset = newInset;
                 EditorApplication.RepaintHierarchyWindow();
             }
-            EditorGUILayout.HelpBox("Matches the color overlay's left edge to the Hierarchy panel's own background. Drag while watching the Hierarchy window.", MessageType.None);
+            EditorGUILayout.LabelField("Matches the color overlay's left edge to the Hierarchy panel's own background. Drag while watching the Hierarchy window.", _subtitleStyle);
 
             EditorGUI.BeginChangeCheck();
             HierarchyDividerStyle currentDividerStyle = HierarchySettings.DividerStyle;
@@ -309,8 +489,8 @@ namespace LenzDev.EditorCustomizer
 
         private void DrawFolderStatsTab(ColorPaletteAsset palette)
         {
-            EditorGUILayout.BeginVertical(_sectionStyle);
-            EditorGUILayout.LabelField("Folder Stats Appearance", _headerStyle);
+            EditorGuiKit.BeginCard(_sectionStyle, CardBackgroundColor, CardBorder, CardRadius);
+            DrawSectionHeader("Folder Stats Appearance");
 
             EditorGUI.BeginChangeCheck();
             Color newBgColor = EditorGUILayout.ColorField("Background Color", palette.statsBackgroundColor);
@@ -331,7 +511,7 @@ namespace LenzDev.EditorCustomizer
             bool isEditingCustom = _editingCustomIndex >= 0 && _editingCustomIndex < palette.customColors.Count;
             Color currentColor = isEditingCustom ? palette.customColors[_editingCustomIndex] : palette.selectedColor;
 
-            EditorGUILayout.LabelField(isEditingCustom ? "Editing Custom Color" : "New Color", _headerStyle);
+            DrawSectionHeader(isEditingCustom ? "Editing Custom Color" : "New Color");
 
             const float previewSize = 48f;
 
@@ -366,7 +546,7 @@ namespace LenzDev.EditorCustomizer
             EditorGUILayout.Space(4);
 
             EditorGUILayout.BeginHorizontal();
-            EditorGUILayout.LabelField("Hex", GUILayout.Width(30));
+            EditorGUILayout.LabelField("Hex", _fieldLabelStyle, GUILayout.Width(30));
             string hex = ColorUtility.ToHtmlStringRGB(currentColor);
             EditorGUI.BeginChangeCheck();
             string newHex = EditorGUILayout.DelayedTextField(hex, _hexFieldStyle);
@@ -399,8 +579,6 @@ namespace LenzDev.EditorCustomizer
                 Undo.RecordObject(palette, "Change Color");
             }
 
-            // Kept in sync either way: selectedColor is documented as "the currently selected
-            // color, other tools can read this" - it should mirror whatever is on screen here.
             palette.selectedColor = newColor;
             EditorUtility.SetDirty(palette);
         }
@@ -441,7 +619,7 @@ namespace LenzDev.EditorCustomizer
         {
             if (colors.Count == 0)
             {
-                EditorGUILayout.HelpBox("No colors available.", MessageType.None);
+                EditorGUILayout.LabelField("No colors available.", _subtitleStyle);
                 return;
             }
 
@@ -532,8 +710,6 @@ namespace LenzDev.EditorCustomizer
             {
                 if (isSelected)
                 {
-                    // A thin, slightly-translucent ring instead of a full-opacity 2px one - reads
-                    // as a crisp selection indicator rather than a bold frame around the swatch.
                     Rect outlineRect = new Rect(rect.x - 1f, rect.y - 1f, rect.width + 2f, rect.height + 2f);
                     var prevColorOutline = GUI.color;
                     GUI.color = new Color(1f, 1f, 1f, 0.85f);
@@ -576,7 +752,7 @@ namespace LenzDev.EditorCustomizer
         {
             if (palette.customIcons.Count == 0)
             {
-                EditorGUILayout.HelpBox("No icons added yet - click any icon in the categories below.", MessageType.None);
+                EditorGUILayout.LabelField("No icons in your palette yet - click one from the categories below to add it.", _subtitleStyle);
                 return;
             }
 
@@ -612,7 +788,7 @@ namespace LenzDev.EditorCustomizer
                 GUILayout.Space(Spacing);
             }
 
-            EditorGUILayout.LabelField("Right-click an icon to remove it", EditorStyles.miniLabel);
+            EditorGUILayout.LabelField("Right-click an icon to remove it", _subtitleStyle);
         }
 
         private void DrawIconCatalogGrid(string[] iconNames, ColorPaletteAsset palette)

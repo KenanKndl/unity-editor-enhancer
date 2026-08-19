@@ -8,13 +8,23 @@ namespace LenzDev.EditorCustomizer
     [CreateAssetMenu(fileName = "New Color Palette", menuName = "Editor Customizer/Color Palette")]
     public class ColorPaletteAsset : ScriptableObject
     {
+        // Slightly transparent (100/255) rather than fully opaque - these are meant to read as
+        // lightweight starting points to click and customize, not final swatch colors.
+        private const float DefaultPresetAlpha = 100f / 255f;
+
         [Tooltip("Fixed / suggested default colors.")]
         public List<Color> defaultColors = new List<Color>
         {
-            Color.red, Color.green, Color.blue, Color.yellow,
-            Color.cyan, Color.magenta, Color.white, Color.black,
-            new Color(1f, 0.5f, 0f),   // orange
-            new Color(0.5f, 0f, 1f)    // purple
+            new Color(1f, 0f, 0f, DefaultPresetAlpha),   // red
+            new Color(0f, 1f, 0f, DefaultPresetAlpha),   // green
+            new Color(0f, 0f, 1f, DefaultPresetAlpha),   // blue
+            new Color(1f, 1f, 0f, DefaultPresetAlpha),   // yellow
+            new Color(0f, 1f, 1f, DefaultPresetAlpha),   // cyan
+            new Color(1f, 0f, 1f, DefaultPresetAlpha),   // magenta
+            new Color(1f, 1f, 1f, DefaultPresetAlpha),   // white
+            new Color(0f, 0f, 0f, DefaultPresetAlpha),   // black
+            new Color(1f, 0.5f, 0f, DefaultPresetAlpha), // orange
+            new Color(0.5f, 0f, 1f, DefaultPresetAlpha)  // purple
         };
 
         [Tooltip("Custom colors the user has added to this palette.")]
