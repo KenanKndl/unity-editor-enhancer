@@ -35,7 +35,7 @@ https://github.com/KenanKndl/unity-editor-enhancer.git
 To pin a specific version, append the release tag:
 
 ```
-https://github.com/KenanKndl/unity-editor-enhancer.git#0.1.0
+https://github.com/KenanKndl/unity-editor-enhancer.git#v0.3.0
 ```
 
 ## Updating
