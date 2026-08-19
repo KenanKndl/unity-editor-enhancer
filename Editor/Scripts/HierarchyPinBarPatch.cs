@@ -28,7 +28,14 @@ namespace LenzDev.EditorCustomizer
                 harmony.UnpatchAll(HarmonyId);
                 ApplyPatch(harmony);
 
-                AssemblyReloadEvents.beforeAssemblyReload += () => harmony.UnpatchAll(HarmonyId);
+                AssemblyReloadEvents.beforeAssemblyReload += () =>
+                {
+                    try { harmony.UnpatchAll(HarmonyId); }
+                    catch (Exception e)
+                    {
+                        Debug.LogWarning("[LenzDev] Failed to unpatch hierarchy pin bar cleanly before reload: " + e.Message);
+                    }
+                };
             }
             catch (Exception e)
             {
