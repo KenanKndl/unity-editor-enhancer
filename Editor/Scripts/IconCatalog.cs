@@ -1,12 +1,9 @@
 namespace LenzDev.EditorCustomizer
 {
     /// <summary>
-    /// Curated, grouped list of Unity's own built-in editor icon names, browsed from the
-    /// ColorPaletteAsset's Icons tab to build a personal icon palette (ColorPaletteAsset.
-    /// customIcons). Every name here was verified to resolve via EditorGUIUtility.IconContent on
-    /// the Unity version this was written against - built-in icon names have changed across
-    /// versions before (e.g. the classic "sv_label0".."sv_label7" were renamed to
-    /// "sv_label_0".."sv_label_7"), so this list may need re-verifying on a major Unity upgrade.
+    /// Curated, grouped list of Unity's built-in editor icon names for the ColorPaletteAsset
+    /// Icons tab. Names are verified against EditorGUIUtility.IconContent and may need
+    /// re-checking after a major Unity upgrade, since built-in icon names occasionally change.
     /// </summary>
     internal static class IconCatalog
     {
@@ -36,12 +33,61 @@ namespace LenzDev.EditorCustomizer
                 "sv_icon_dot8_pix16_gizmo", "sv_icon_dot9_pix16_gizmo", "sv_icon_dot10_pix16_gizmo", "sv_icon_dot11_pix16_gizmo",
                 "sv_icon_dot12_pix16_gizmo", "sv_icon_dot13_pix16_gizmo", "sv_icon_dot14_pix16_gizmo", "sv_icon_dot15_pix16_gizmo"
             }),
-            new Category("Components", new[]
+            new Category("Transform Tools", new[]
             {
-                "Camera Icon", "Light Icon", "AudioSource Icon", "Rigidbody Icon",
-                "BoxCollider Icon", "SphereCollider Icon", "CapsuleCollider Icon", "MeshRenderer Icon",
-                "MeshFilter Icon", "SkinnedMeshRenderer Icon", "ParticleSystem Icon", "Canvas Icon",
-                "RectTransform Icon", "Transform Icon", "Animator Icon", "AnimatorController Icon"
+                "MoveTool", "RotateTool", "ScaleTool", "RectTool", "TransformTool",
+                "ViewToolMove", "ViewToolOrbit", "ViewToolZoom"
+            }),
+            new Category("Physics", new[]
+            {
+                "Rigidbody Icon", "Rigidbody2D Icon", "BoxCollider Icon", "SphereCollider Icon",
+                "CapsuleCollider Icon", "MeshCollider Icon", "WheelCollider Icon", "TerrainCollider Icon",
+                "CharacterController Icon", "BoxCollider2D Icon", "CircleCollider2D Icon", "PolygonCollider2D Icon",
+                "EdgeCollider2D Icon", "CapsuleCollider2D Icon", "HingeJoint Icon", "SpringJoint Icon",
+                "FixedJoint Icon", "ConfigurableJoint Icon", "HingeJoint2D Icon", "SpringJoint2D Icon",
+                "DistanceJoint2D Icon", "TargetJoint2D Icon", "RelativeJoint2D Icon", "FixedJoint2D Icon",
+                "FrictionJoint2D Icon", "WheelJoint2D Icon", "ConstantForce Icon", "ConstantForce2D Icon", "Cloth Icon"
+            }),
+            new Category("Rendering", new[]
+            {
+                "MeshRenderer Icon", "MeshFilter Icon", "SkinnedMeshRenderer Icon", "SpriteRenderer Icon",
+                "SpriteMask Icon", "LineRenderer Icon", "TrailRenderer Icon", "BillboardRenderer Icon",
+                "ParticleSystem Icon", "ParticleSystemForceField Icon", "VisualEffect Icon", "LODGroup Icon",
+                "ReflectionProbe Icon", "LightProbeGroup Icon", "LightProbeProxyVolume Icon",
+                "OcclusionArea Icon", "OcclusionPortal Icon", "Projector Icon", "FlareLayer Icon"
+            }),
+            new Category("World & Navigation", new[]
+            {
+                "Terrain Icon", "Tree Icon", "WindZone Icon", "Grid Icon", "Tilemap Icon", "TilemapRenderer Icon",
+                "NavMeshAgent Icon", "NavMeshObstacle Icon", "OffMeshLink Icon"
+            }),
+            new Category("Audio & Video", new[]
+            {
+                "AudioSource Icon", "AudioListener Icon", "AudioReverbZone Icon", "AudioLowPassFilter Icon",
+                "AudioHighPassFilter Icon", "AudioEchoFilter Icon", "AudioChorusFilter Icon",
+                "AudioDistortionFilter Icon", "AudioReverbFilter Icon", "VideoPlayer Icon"
+            }),
+            new Category("UI (uGUI)", new[]
+            {
+                "Canvas Icon", "CanvasGroup Icon", "CanvasScaler Icon", "GraphicRaycaster Icon", "RectTransform Icon",
+                "Image Icon", "RawImage Icon", "Text Icon", "Button Icon", "Toggle Icon", "ToggleGroup Icon",
+                "Slider Icon", "Scrollbar Icon", "ScrollRect Icon", "InputField Icon", "Dropdown Icon", "Mask Icon",
+                "RectMask2D Icon", "ContentSizeFitter Icon", "HorizontalLayoutGroup Icon", "VerticalLayoutGroup Icon",
+                "GridLayoutGroup Icon", "LayoutElement Icon", "AspectRatioFitter Icon", "EventSystem Icon",
+                "StandaloneInputModule Icon", "Selectable Icon"
+            }),
+            new Category("Assets", new[]
+            {
+                "Material Icon", "Shader Icon", "cs Script Icon", "Texture Icon", "Texture2D Icon", "AudioClip Icon",
+                "AnimationClip Icon", "Font Icon", "PhysicsMaterial2D Icon", "Avatar Icon", "SceneAsset Icon",
+                "GameObject Icon", "Prefab Icon", "ScriptableObject Icon", "Animator Icon", "AnimatorController Icon"
+            }),
+            new Category("Gizmos", new[]
+            {
+                "AreaLight Gizmo", "AudioSource Gizmo", "Camera Gizmo", "DirectionalLight Gizmo", "DiscLight Gizmo",
+                "LensFlare Gizmo", "LightProbeGroup Gizmo", "LightProbeProxyVolume Gizmo", "Main Light Gizmo",
+                "ParticleSystem Gizmo", "ParticleSystemForceField Gizmo", "PointLight Gizmo", "Projector Gizmo",
+                "ReflectionProbe Gizmo", "SpotLight Gizmo", "VisualEffect Gizmo", "WindZone Gizmo"
             }),
             new Category("Folders", new[]
             {
@@ -49,11 +95,24 @@ namespace LenzDev.EditorCustomizer
             }),
             new Category("Status", new[]
             {
-                "console.warnicon", "console.erroricon", "console.infoicon"
+                "console.warnicon", "console.erroricon", "console.infoicon",
+                "greenLight", "orangeLight", "redLight",
+                "Favorite Icon", "LockIcon", "LockIcon-On", "VisibilityOn", "VisibilityOff", "Linked", "Unlinked"
             }),
             new Category("Toolbar", new[]
             {
-                "Toolbar Plus", "Toolbar Minus", "_Popup"
+                "Toolbar Plus", "Toolbar Minus", "_Popup", "PlayButton", "PauseButton", "StepButton",
+                "Search Icon", "Settings Icon", "FilterByType", "FilterByLabel"
+            }),
+            new Category("Windows", new[]
+            {
+                "UnityEditor.SceneView", "UnityEditor.GameView", "UnityEditor.ConsoleWindow",
+                "UnityEditor.InspectorWindow", "UnityEditor.AnimationWindow", "UnityEditor.ProfilerWindow",
+                "UnityEditor.HierarchyWindow"
+            }),
+            new Category("Primitives", new[]
+            {
+                "PreMatCube", "PreMatSphere", "PreMatCylinder", "PreMatQuad"
             })
         };
     }
