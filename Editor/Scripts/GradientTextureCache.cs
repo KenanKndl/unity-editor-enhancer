@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
@@ -17,11 +18,11 @@ namespace LenzDev.EditorCustomizer
     public static class GradientTextureCache
     {
         private const int TextureSize = 64;
-        private static readonly Dictionary<string, CachedTextureData> _cache = new();
+        private static readonly Dictionary<ColorPairKey, CachedTextureData> _cache = new();
 
         public static CachedTextureData GetOrCreate(Color color, Color fadeTo)
         {
-            string key = ColorUtility.ToHtmlStringRGBA(color) + "_" + ColorUtility.ToHtmlStringRGBA(fadeTo);
+            var key = new ColorPairKey(color, fadeTo);
             if (_cache.TryGetValue(key, out var cached))
                 return cached;
 
@@ -67,6 +68,30 @@ namespace LenzDev.EditorCustomizer
                 return texture;
             }
             catch { return texture; }
+        }
+
+        // Packed uint keys avoid a per-lookup string allocation - GetOrCreate runs on every
+        // colored row/folder repaint.
+        private readonly struct ColorPairKey : IEquatable<ColorPairKey>
+        {
+            private readonly uint _from;
+            private readonly uint _to;
+
+            public ColorPairKey(Color from, Color to)
+            {
+                _from = Pack(from);
+                _to = Pack(to);
+            }
+
+            private static uint Pack(Color c)
+            {
+                Color32 c32 = c;
+                return ((uint)c32.r << 24) | ((uint)c32.g << 16) | ((uint)c32.b << 8) | c32.a;
+            }
+
+            public bool Equals(ColorPairKey other) => _from == other._from && _to == other._to;
+            public override bool Equals(object obj) => obj is ColorPairKey other && Equals(other);
+            public override int GetHashCode() => unchecked((int)(_from * 397 ^ _to));
         }
     }
 }
