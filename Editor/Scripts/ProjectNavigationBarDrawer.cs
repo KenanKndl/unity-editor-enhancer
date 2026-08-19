@@ -99,10 +99,7 @@ namespace LenzDev.EditorCustomizer
 
             if (needsScroll)
             {
-                // Mirrored layout: chip 0 sits at the right edge and later chips extend
-                // leftward, so the physical left arrow now reveals more of the strip (increases
-                // scrollOffset) and the physical right arrow scrolls back toward chip 0
-                // (decreases scrollOffset) - the opposite of the un-mirrored left-to-right case.
+                // Mirrored layout: left arrow increases scrollOffset, right arrow decreases it.
                 DrawArrow(new Rect(rect.x + ChipPadding, rect.y, ArrowWidth, rect.height), false,
                     _scrollOffset < maxScroll - 0.01f, () => _scrollOffset = Mathf.Min(maxScroll, _scrollOffset + ScrollStep));
                 DrawArrow(new Rect(rect.xMax - ChipPadding - ArrowWidth, rect.y, ArrowWidth, rect.height), true,
@@ -125,9 +122,11 @@ namespace LenzDev.EditorCustomizer
 
             if (_hintStyle == null)
             {
+                // Right-aligned to match the pinned chips themselves, which anchor to the right
+                // edge (see the mirrored layout in Draw) rather than the default left-to-right strip.
                 _hintStyle = new GUIStyle(EditorStyles.miniLabel)
                 {
-                    alignment = TextAnchor.MiddleLeft,
+                    alignment = TextAnchor.MiddleRight,
                     fontStyle = FontStyle.Italic
                 };
             }
