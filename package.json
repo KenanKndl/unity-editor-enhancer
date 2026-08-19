@@ -1,0 +1,24 @@
+{
+  "name": "com.lenzdev.unity-editor-customizer",
+  "version": "0.2.1",
+  "displayName": "Unity Editor Customizer",
+  "description": "Custom Unity Editor extensions",
+  "unity": "6000.0",
+  "license": "MIT",
+  "author": {
+    "name": "LenzDev",
+    "url": "https://github.com/KenanKndl"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/KenanKndl/unity-editor-enhancer.git"
+  },
+  "documentationUrl": "https://github.com/KenanKndl/unity-editor-enhancer#readme",
+  "changelogUrl": "https://github.com/KenanKndl/unity-editor-enhancer/blob/main/CHANGELOG.md",
+  "keywords": [
+    "editor",
+    "hierarchy",
+    "project-browser",
+    "productivity"
+  ]
+}
