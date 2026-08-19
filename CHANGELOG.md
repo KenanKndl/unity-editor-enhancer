@@ -5,6 +5,33 @@ All notable changes to this package are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0]
+
+### Added
+- Resolves which Color Palette asset is "active" when more than one exists in a project, with a
+  notice and a "Set as Active Palette" button in the Inspector
+- **Icons tab**: the built-in icon catalog now covers about 195 of Unity's Editor icons across 15
+  categories, up from 48
+- An in-Editor bug/feedback report window (**Tools > LenzDev > Editor Enhancer > Report a Bug or
+  Send Feedback...**, also available from the Color Palette Inspector), which opens a pre-filled
+  GitHub issue
+- The update checker is now also embedded directly in the Color Palette Inspector, alongside the
+  existing Tools menu window
+
+### Changed
+- **Package ID renamed** from `com.lenzdev.unity-editor-customizer` to
+  `com.lenzdev.unity-editor-enhancer`, matching the repository name and the Tools menu path
+  (now **Tools > LenzDev > Editor Enhancer**). Existing installs won't update in place - remove
+  the old package from Package Manager and re-add it via the git URL below
+- Redesigned the Color Palette Inspector with a flat, dark card-based layout and a segmented tab
+  bar
+- **Project window**: the pin bar's empty-state hint text is now right-aligned, matching the
+  pinned chips
+
+### Fixed
+- **Hierarchy window**: removed a faint background tint that appeared on every row regardless of
+  color, and fixed a text/icon offset on hover, selection, and colored rows
+
 ## [0.2.1]
 
 ### Fixed
