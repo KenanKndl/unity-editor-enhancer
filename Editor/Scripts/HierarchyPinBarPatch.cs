@@ -7,25 +7,15 @@ using UnityEngine;
 namespace LenzDev.EditorCustomizer
 {
     /// <summary>
-    /// Uses Harmony to patch SceneHierarchy (the object SceneHierarchyWindow delegates its
-    /// actual tree drawing to), shrinking the Rect it's about to draw into and drawing the pin
-    /// bar into the freed strip above it.
-    ///
-    /// A postfix on SceneHierarchyWindow.DoToolbarLayout that just reserved extra GUILayout
-    /// height was tried first and had no effect - SceneHierarchy.OnGUI(Rect) computes its own
-    /// area independently rather than consuming "remaining" GUILayout space, so a Harmony
-    /// prefix that rewrites the incoming Rect argument (the same "reading/changing arguments"
-    /// technique, just at a cleaner interception point than ProjectNavigationBarPatch's
-    /// CalculateRects field-shifting) is what actually works.
-    ///
-    /// Every step is guarded by try/catch and silently disables itself (with just a warning) if
-    /// it fails, since this technique can break across Unity version updates.
+    /// Uses Harmony to patch SceneHierarchy's OnGUI, shrinking the drawn Rect to free a strip
+    /// above it for the pin bar. Guarded by try/catch and silently disables itself (with a
+    /// warning) if it fails, since this technique can break across Unity version updates.
     /// </summary>
     [InitializeOnLoad]
     internal static class HierarchyPinBarPatch
     {
         public const float BarHeight = 22f;
-        private const string HarmonyId = "com.lenzdev.unity-editor-customizer.hierarchypinbar";
+        private const string HarmonyId = "com.lenzdev.unity-editor-enhancer.hierarchypinbar";
 
         private static bool _patchApplied;
         private static FieldInfo _editorWindowField;

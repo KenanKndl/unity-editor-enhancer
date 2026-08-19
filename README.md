@@ -1,4 +1,4 @@
-# Unity Editor Customizer
+# Unity Editor Enhancer
 
 Quality-of-life extensions for the Unity Project and Hierarchy windows: folder/GameObject coloring, folder stats, bookmarks, scene favorites, and more.
 
@@ -16,6 +16,10 @@ Quality-of-life extensions for the Unity Project and Hierarchy windows: folder/G
 - Restored active-state checkbox and scene-visibility ("eye") icon on every row
 - Divider and header rows for organizing large scenes (stripped from player builds automatically)
 - Pin bar for quickly jumping to frequently used GameObjects
+
+**Main toolbar** (Unity 6.3+)
+- Time Scale control docked next to Play/Pause/Step, with a slider, exact numeric entry, and
+  speed presets
 
 **Scenes**
 - Scene favorites, custom scene ordering, and a quick-switch popup
@@ -36,7 +40,12 @@ https://github.com/KenanKndl/unity-editor-enhancer.git#0.1.0
 
 ## Updating
 
-Use **Tools > LenzDev > Editor Customizer > Check for Updates...** inside Unity to check for and install newer releases without leaving the editor.
+Use **Tools > LenzDev > Editor Enhancer > Check for Updates...** inside Unity to check for and install newer releases without leaving the editor.
+
+## Reporting Issues
+
+Use **Tools > LenzDev > Editor Enhancer > Report a Bug or Send Feedback...**, or the same button
+in the Color Palette asset's Inspector, to open a pre-filled GitHub issue.
 
 ## Requirements
 

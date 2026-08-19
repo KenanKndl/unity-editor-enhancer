@@ -17,7 +17,7 @@ namespace LenzDev.EditorCustomizer
     internal static class ProjectNavigationBarPatch
     {
         public const float BarHeight = 22f;
-        private const string HarmonyId = "com.lenzdev.unity-editor-customizer.navigationbar";
+        private const string HarmonyId = "com.lenzdev.unity-editor-enhancer.navigationbar";
 
         private static float _toolbarHeight = 21f;
         private static bool _patchApplied;
@@ -30,9 +30,8 @@ namespace LenzDev.EditorCustomizer
         {
             try
             {
-                // Domain reload doesn't always clean up native trampolines; removing the old patch
-                // with the same ID before re-patching prevents patches from stacking on every
-                // recompile (and the progressively worsening freezes that caused).
+                // Removes any previous patch first - domain reload can leave native trampolines
+                // stacking on recompile otherwise.
                 var harmony = new Harmony(HarmonyId);
                 harmony.UnpatchAll(HarmonyId);
                 ApplyPatch(harmony);

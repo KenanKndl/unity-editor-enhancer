@@ -1,7 +1,7 @@
 {
-  "name": "com.lenzdev.unity-editor-customizer",
-  "version": "0.2.1",
-  "displayName": "Unity Editor Customizer",
+  "name": "com.lenzdev.unity-editor-enhancer",
+  "version": "0.3.0",
+  "displayName": "Unity Editor Enhancer",
   "description": "Custom Unity Editor extensions",
   "unity": "6000.0",
   "license": "MIT",
